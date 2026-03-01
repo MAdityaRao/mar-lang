@@ -26,4 +26,7 @@ dirs:
 clean:
 	rm -rf build bin
 
-.PHONY: all clean dirs
+release: clean
+	$(MAKE) CFLAGS="-std=c11 -Wall -Wextra -O2 -Iinclude" all
+
+.PHONY: all clean dirs release
