@@ -3,14 +3,33 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*' # Triggers on tags like v1.0.7
 
 permissions:
-  contents: write
+  contents: write # Essential for the 'gh' tool to create releases
 
 jobs:
+  # Stage 1: Create the Release entry once to avoid race conditions
+  create_release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create.outputs.url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Create Release
+        id: create
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Create the release only once. If it exists, this step just finishes.
+          gh release create ${{ github.ref_name }} --title "Release ${{ github.ref_name }}" --notes "Automated build for Mar Language." || echo "Release already exists"
+
+  # Stage 2: Build and Upload for each OS
   build:
     name: Build on ${{ matrix.os }}
+    needs: create_release # Wait until the release entry is created
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -24,23 +43,22 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4 # Created by GitHub, so this is allowed
+        uses: actions/checkout@v4
 
       - name: Build Mar Compiler
-        run: make #
+        run: make # Uses your Makefile to generate bin/mar
 
       - name: Rename and Upload
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Use the 'gh' tool which is native to GitHub
+          # Move binary to the expected asset name
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             mv bin/mar.exe ${{ matrix.asset_name }}
           else
             mv bin/mar ${{ matrix.asset_name }}
           fi
           
-          # This command creates/updates the release and uploads the file
-          gh release upload ${{ github.ref_name }} ${{ matrix.asset_name }} --clobber || \
-          gh release create ${{ github.ref_name }} ${{ matrix.asset_name }} --title "Release ${{ github.ref_name }}" --notes "Automated release"
+          # Upload specifically to the existing tag
+          gh release upload ${{ github.ref_name }} ${{ matrix.asset_name }} --clobber
