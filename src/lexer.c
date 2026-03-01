@@ -14,6 +14,8 @@ static const struct { const char *word; TokenKind kind; } KEYWORDS[] = {
     {"return",TOK_RETURN},{"break",TOK_BREAK},
     {"print",TOK_PRINT},{"take",TOK_TAKE},
     {"true",TOK_TRUE},{"false",TOK_FALSE},
+    {"class", TOK_CLASS},
+    {"new",   TOK_NEW},
     {NULL,0}
 };
 

@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 static char *read_file(const char *path) {
     FILE *f = fopen(path, "rb");
@@ -15,6 +16,7 @@ static char *read_file(const char *path) {
     long sz = ftell(f);
     rewind(f);
     char *buf = malloc(sz + 2);
+    if (!buf) { fprintf(stderr, "Out of memory\n"); exit(1); }
     fread(buf, 1, sz, f);
     buf[sz] = '\0';
     fclose(f);
@@ -23,7 +25,7 @@ static char *read_file(const char *path) {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        fprintf(stderr, "Mar Compiler v1.0.1\n");
+        fprintf(stderr, "Mar Compiler v1.1.10\n");
         fprintf(stderr, "Usage: mar <file.mar> [options]\n");
         fprintf(stderr, "       mar run <file.mar>   (Compile and run immediately)\n");
         fprintf(stderr, "Options:\n");
@@ -43,15 +45,15 @@ int main(int argc, char **argv) {
             return 1;
         }
         run_immediately = true;
-        arg_offset = 2; // Shift indices to ignore 'run'
+        arg_offset = 2; 
     }
 
     const char *input  = argv[arg_offset];
+    // Use a temp file for 'run' to avoid cluttering the workspace
     const char *output = run_immediately ? "/tmp/mar_temp.c" : "a.out.c";
     bool dump_tokens   = false;
     bool dump_ast      = false;
 
-    // Start loop after the input filename
     for (int i = arg_offset + 1; i < argc; i++) {
         if (strcmp(argv[i], "-o") == 0 && i+1 < argc) output = argv[++i];
         else if (strcmp(argv[i], "--dump-tokens") == 0) dump_tokens = true;
@@ -100,17 +102,28 @@ int main(int argc, char **argv) {
 
     /* Execution Logic for 'mar run' */
     if (run_immediately) {
-        char cmd[512];
-        // 1. Compile generated C to a binary in /tmp
-        snprintf(cmd, sizeof(cmd), "cc %s -o /tmp/mar_bin", output);
-        if (system(cmd) != 0) {
-            fprintf(stderr, "Error: C compilation failed.\n");
+        char compile_cmd[1024];
+        char run_cmd[1024];
+        const char *bin_path = "/tmp/mar_bin";
+
+        // 1. Compile generated C to a binary, linking the math library (-lm)
+        snprintf(compile_cmd, sizeof(compile_cmd), "cc %s -o %s -lm", output, bin_path);
+        
+        if (system(compile_cmd) == 0) {
+            // 2. Execute the temporary binary
+            snprintf(run_cmd, sizeof(run_cmd), "%s", bin_path);
+            system(run_cmd);
+
+            // 3. Cleanup: Remove temporary binary and C source
+            remove(bin_path);
+            remove(output);
+        } else {
+            fprintf(stderr, "Error: C compilation failed. Check if 'cc' is installed.\n");
             return 1;
         }
-        // 2. Execute the binary
-        system("/tmp/mar_bin");
     } else {
-        printf("Compiled: %s → %s\n", input, output);
+        printf("Compiled: %s -> %s\n", input, output);
+        printf("To run: cc %s -lm -o mar_prog && ./mar_prog\n", output);
     }
 
     arena_destroy(g_arena);

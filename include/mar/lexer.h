@@ -24,6 +24,7 @@ typedef enum {
     TOK_LBRACKET, TOK_RBRACKET,
     TOK_COMMA, TOK_AMPERSAND,
     TOK_EOF, TOK_UNKNOWN,
+    TOK_CLASS, TOK_NEW, TOK_DOT
 } TokenKind;
 
 typedef struct {

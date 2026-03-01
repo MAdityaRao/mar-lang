@@ -1,5 +1,0 @@
-int main()
-{
-    print("Hello from Mar!\n")
-    return 0
-}

@@ -14,6 +14,7 @@ typedef struct MarType {
     TypeKind        kind;
     struct MarType *elem;
     int             size;
+    char           *name; // Correctly added for class names
 } MarType;
 
 typedef enum {
@@ -23,6 +24,8 @@ typedef enum {
     EXPR_BINARY, EXPR_UNARY,
     EXPR_ASSIGN, EXPR_COMPOUND_ASSIGN,
     EXPR_CALL, EXPR_ADDR_OF,
+    EXPR_MEMBER_ACCESS, // For the '.' operator
+    EXPR_NEW,           // For 'new ClassName()'
 } ExprKind;
 
 typedef enum {
@@ -35,7 +38,21 @@ typedef enum {
     OP_STAR_ASSIGN, OP_SLASH_ASSIGN, OP_PCT_ASSIGN,
 } Operator;
 
-typedef struct Expr {
+// Structure for Class Fields
+typedef struct {
+    char *name;
+    MarType *type;
+} Field;
+
+// Structure for Class Methods
+typedef struct {
+    char *name;
+    struct FuncDecl *method;
+} Method;
+
+typedef struct Expr Expr;
+
+struct Expr {
     ExprKind  kind;
     MarType  *type;
     SrcLoc    loc;
@@ -52,8 +69,12 @@ typedef struct Expr {
         struct { Operator op; struct Expr *target; struct Expr *value; } assign;
         struct { char *callee; struct Expr **args; int argc; } call;
         struct { struct Expr *operand; } addr;
+        // Logic for object.member
+        struct { struct Expr *left; char *name; } member; 
+        // Logic for new Class()
+        struct { char *class_name; struct Expr **args; int argc; } new_obj;
     };
-} Expr;
+};
 
 typedef struct Stmt Stmt;
 
@@ -63,12 +84,23 @@ typedef struct {
     int    body_count;
 } CaseClause;
 
+// Structure for the Class Definition itself
+typedef struct {
+    char *name;
+    Field *fields;
+    int field_count;
+    Method *methods;
+    int method_count;
+    SrcLoc loc;
+} ClassDecl;
+
 typedef enum {
     STMT_VAR_DECL, STMT_ASSIGN, STMT_IF,
     STMT_WHILE, STMT_FOR_RANGE, STMT_SWITCH,
     STMT_RETURN, STMT_BREAK,
     STMT_PRINT, STMT_TAKE,
     STMT_EXPR, STMT_BLOCK,
+    STMT_CLASS_DECL, // Added to recognize class blocks
 } StmtKind;
 
 struct Stmt {
@@ -87,10 +119,11 @@ struct Stmt {
         struct { char *fmt; Expr **args; int argc; } take;
         struct { Expr *expr; } expr_stmt;
         struct { Stmt **stmts; int count; } block;
+        ClassDecl *class_decl; // For STMT_CLASS_DECL
     };
 };
 
-typedef struct {
+typedef struct FuncDecl {
     char     *name;
     MarType  *return_type;
     char    **param_names;
@@ -103,6 +136,8 @@ typedef struct {
 typedef struct {
     FuncDecl  **funcs;
     int         func_count;
+    ClassDecl **classes; // Array to store all classes in the file
+    int         class_count;
     const char *filename;
 } Program;
 

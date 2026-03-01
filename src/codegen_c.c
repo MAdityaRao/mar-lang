@@ -3,21 +3,29 @@
 #include <string.h>
 #include <inttypes.h>
 
+/* ── Indentation ───────────────────────────────────────────────────────────── */
+
 static void ind(CGenCtx *c) {
     for (int i = 0; i < c->indent * 4; i++) fputc(' ', c->out);
 }
 
+/* ── Type emission ─────────────────────────────────────────────────────────── */
+
 static void emit_type(CGenCtx *c, MarType *t) {
+    if (!t) { fprintf(c->out, "void"); return; }
     switch (t->kind) {
-        case TY_INT:   fprintf(c->out, "int");    break;
-        case TY_FLOAT: fprintf(c->out, "double"); break;
-        case TY_CHAR:  fprintf(c->out, "char");   break;
-        case TY_BOOL:  fprintf(c->out, "bool");   break;
-        case TY_VOID:  fprintf(c->out, "void");   break;
-        case TY_ARRAY: emit_type(c, t->elem);     break;
-        default:       fprintf(c->out, "int");    break;
+        case TY_INT:     fprintf(c->out, "int");          break;
+        case TY_FLOAT:   fprintf(c->out, "double");       break;
+        case TY_CHAR:    fprintf(c->out, "char");         break;
+        case TY_BOOL:    fprintf(c->out, "bool");         break;
+        case TY_VOID:    fprintf(c->out, "void");         break;
+        case TY_ARRAY:   emit_type(c, t->elem);           break;
+        case TY_UNKNOWN: fprintf(c->out, "%s*", t->name); break; /* class pointer */
+        default:         fprintf(c->out, "int");          break;
     }
 }
+
+/* ── Operator strings ──────────────────────────────────────────────────────── */
 
 static const char *op_str(Operator op) {
     switch (op) {
@@ -32,6 +40,8 @@ static const char *op_str(Operator op) {
     }
 }
 
+/* ── String literal escaping ───────────────────────────────────────────────── */
+
 static void emit_str_escaped(CGenCtx *c, const char *s) {
     for (const char *p = s; *p; p++) {
         switch (*p) {
@@ -43,6 +53,8 @@ static void emit_str_escaped(CGenCtx *c, const char *s) {
         }
     }
 }
+
+/* ── Expression emission ───────────────────────────────────────────────────── */
 
 static void emit_expr(CGenCtx *c, Expr *e) {
     switch (e->kind) {
@@ -75,8 +87,7 @@ static void emit_expr(CGenCtx *c, Expr *e) {
             fprintf(c->out, ")");
             break;
         case EXPR_UNARY:
-            if (e->unary.op == OP_NOT) fprintf(c->out, "(!");
-            else                       fprintf(c->out, "(-");
+            fprintf(c->out, e->unary.op == OP_NOT ? "(!" : "(-");
             emit_expr(c, e->unary.operand);
             fprintf(c->out, ")");
             break;
@@ -92,10 +103,28 @@ static void emit_expr(CGenCtx *c, Expr *e) {
             fprintf(c->out, "&");
             emit_expr(c, e->addr.operand);
             break;
+        case EXPR_MEMBER_ACCESS:
+            /* dot operator on class pointers: p.health  →  p->health */
+            emit_expr(c, e->member.left);
+            fprintf(c->out, "->%s", e->member.name);
+            break;
+        case EXPR_NEW:
+            /* 'new Foo(args)' → GNU statement expression allocating via arena */
+            fprintf(c->out, "({ %s* _obj = arena_alloc(g_arena, sizeof(%s)); ",
+                    e->new_obj.class_name, e->new_obj.class_name);
+            fprintf(c->out, "%s_init(_obj", e->new_obj.class_name);
+            for (int i = 0; i < e->new_obj.argc; i++) {
+                fprintf(c->out, ", ");
+                emit_expr(c, e->new_obj.args[i]);
+            }
+            fprintf(c->out, "); _obj; })");
+            break;
         default:
             fprintf(c->out, "0"); break;
     }
 }
+
+/* ── Statement emission ────────────────────────────────────────────────────── */
 
 static void emit_stmt(CGenCtx *c, Stmt *s) {
     switch (s->kind) {
@@ -103,7 +132,7 @@ static void emit_stmt(CGenCtx *c, Stmt *s) {
             ind(c);
             emit_type(c, s->var_decl.type);
             fprintf(c->out, " %s", s->var_decl.name);
-            if (s->var_decl.type->kind == TY_ARRAY)
+            if (s->var_decl.type && s->var_decl.type->kind == TY_ARRAY)
                 fprintf(c->out, "[%d]", s->var_decl.type->size);
             if (s->var_decl.array_init) {
                 fprintf(c->out, " = {");
@@ -287,11 +316,51 @@ static void emit_stmt(CGenCtx *c, Stmt *s) {
     }
 }
 
+/* ── Class emission ────────────────────────────────────────────────────────── */
+
+static void emit_class(CGenCtx *c, ClassDecl *cls) {
+    fprintf(c->out, "/* Class: %s */\n", cls->name);
+    fprintf(c->out, "typedef struct {\n");
+    for (int i = 0; i < cls->field_count; i++) {
+        fprintf(c->out, "    ");
+        emit_type(c, cls->fields[i].type);
+        fprintf(c->out, " %s;\n", cls->fields[i].name);
+    }
+    fprintf(c->out, "} %s;\n\n", cls->name);
+
+    for (int i = 0; i < cls->method_count; i++) {
+        FuncDecl *m = cls->methods[i].method;
+        emit_type(c, m->return_type);
+        fprintf(c->out, " %s_%s(%s* this", cls->name, m->name, cls->name);
+        for (int j = 0; j < m->param_count; j++) {
+            fprintf(c->out, ", ");
+            emit_type(c, m->param_types[j]);
+            fprintf(c->out, " %s", m->param_names[j]);
+        }
+        fprintf(c->out, ") ");
+        emit_stmt(c, m->body);
+        fprintf(c->out, "\n");
+    }
+}
+
+/* ── Public entry point ────────────────────────────────────────────────────── */
+
 bool codegen_c_program(Program *prog, FILE *out, ErrorCtx *ec) {
     CGenCtx ctx = {.out=out, .errors=ec, .indent=0, .tmp_counter=0};
+
     fprintf(out, "/* Generated by mar compiler */\n");
     fprintf(out, "#include <stdio.h>\n");
-    fprintf(out, "#include <stdbool.h>\n\n");
+    fprintf(out, "#include <stdbool.h>\n");
+    fprintf(out, "#include <stdlib.h>\n");
+    fprintf(out, "#include <math.h>\n");
+    fprintf(out, "extern void* arena_alloc(void*, size_t);\n");
+    fprintf(out, "extern void* g_arena;\n\n");
+
+    /* 1. Emit class structs and methods first (functions may reference them) */
+    for (int i = 0; i < prog->class_count; i++)
+        emit_class(&ctx, prog->classes[i]);
+
+    /* 2. Emit function prototypes */
     for (int i = 0; i < prog->func_count; i++) {
         FuncDecl *f = prog->funcs[i];
         emit_type(&ctx, f->return_type);
@@ -304,6 +373,8 @@ bool codegen_c_program(Program *prog, FILE *out, ErrorCtx *ec) {
         }
         fprintf(out, ");\n");
     }
+
+    /* 3. Emit function bodies */
     fprintf(out, "\n");
     for (int i = 0; i < prog->func_count; i++) {
         FuncDecl *f = prog->funcs[i];
@@ -319,5 +390,6 @@ bool codegen_c_program(Program *prog, FILE *out, ErrorCtx *ec) {
         emit_stmt(&ctx, f->body);
         fprintf(out, "\n");
     }
+
     return ec->count == 0;
 }
