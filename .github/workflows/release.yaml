@@ -1,8 +1,12 @@
 name: Build and Release
+
 on:
   push:
     tags:
-      - 'v*' 
+      - 'v*' # Triggers when you push a tag like v1.0.2
+
+permissions:
+  contents: write # Fixes the 403 error by allowing the bot to create releases
 
 jobs:
   build:
@@ -12,10 +16,10 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact_name: mar-linux-x86_64
+            artifact_name: bin/mar
             asset_name: mar-linux-x86_64
           - os: macos-latest
-            artifact_name: mar-macos-arm64
+            artifact_name: bin/mar
             asset_name: mar-macos-arm64
           - os: windows-latest
             artifact_name: bin/mar.exe
@@ -26,18 +30,16 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build Mar Compiler
-        run: make # This creates bin/mar
+        run: make # Compiles your code using your Makefile
 
       - name: Rename binary for release
         shell: bash
-        # Add 'bin/' before the source filename
-        run: mv bin/mar ${{ matrix.asset_name }}
+        # We use the full path 'bin/' so the runner can find your file
+        run: mv ${{ matrix.artifact_name }} ${{ matrix.asset_name }}
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           files: ${{ matrix.asset_name }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Built-in token
