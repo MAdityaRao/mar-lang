@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-VERSION="v1.1.10"
+VERSION="v1.1.11"
 BASE="https://github.com/MAdityaRao/mar-lang/releases/download/$VERSION"
 
 OS=$(uname -s)
