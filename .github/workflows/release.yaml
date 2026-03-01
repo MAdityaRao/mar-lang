@@ -48,11 +48,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Detect the binary regardless of extension
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            mv bin/mar.exe ${{ matrix.asset_name }}
+            if [ -f "bin/mar.exe" ]; then
+              mv bin/mar.exe ${{ matrix.asset_name }}
+            elif [ -f "bin/mar" ]; then
+              mv bin/mar ${{ matrix.asset_name }}
+            else
+              echo "Error: Binary not found in bin/" && exit 1
+            fi
           else
             mv bin/mar ${{ matrix.asset_name }}
           fi
+          
+          # Upload to the draft release
           gh release upload ${{ github.ref_name }} ${{ matrix.asset_name }} --clobber
 
   # 3. Publish the release only after ALL uploads are done
