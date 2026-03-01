@@ -19,7 +19,7 @@ static Token *advance(Parser *p) {
     if (t->kind != TOK_EOF) p->pos++;
     return t;
 }
-
+static bool is_type_token(TokenKind k);
 static bool check(Parser *p, TokenKind k) { return peek(p)->kind == k; }
 
 static Token *expect(Parser *p, TokenKind k) {
@@ -195,19 +195,81 @@ static Stmt *parse_class(Parser *p) {
     return stmt_new(STMT_BLOCK, loc_of(t));
 }
 
+/* Place this with your other forward declarations at the top */
 static bool is_type_token(TokenKind k) {
-    return k==TOK_INT||k==TOK_FLOAT||k==TOK_CHAR||k==TOK_BOOL||k==TOK_VOID;
+    return k == TOK_INT || k == TOK_FLOAT || k == TOK_CHAR || 
+           k == TOK_BOOL || k == TOK_VOID;
 }
 
-static Stmt *parse_var_decl(Parser *p) {
-    MarType *base = parse_type(p);
-    Token *name_tok = expect(p, TOK_IDENT);
-    SrcLoc loc = loc_of(name_tok);
-    Stmt *s = stmt_new(STMT_VAR_DECL, loc);
-    s->var_decl.name = MAR_STRDUP(name_tok->value);
-    /* ... (Existing array and init logic) ... */
-    if (check(p, TOK_LBRACKET)) { advance(p); Token *sz = expect(p, TOK_INT_LIT); int arr_sz = atoi(sz->value); expect(p, TOK_RBRACKET); s->var_decl.type = type_array(base, arr_sz); if (match(p, TOK_ASSIGN)) { expect(p, TOK_LBRACE); Expr **inits = malloc(sizeof(Expr*)*arr_sz); int ic = 0; while (!check(p,TOK_RBRACE) && !check(p,TOK_EOF)) { inits[ic++] = parse_expr(p); if (!check(p,TOK_RBRACE)) match(p,TOK_COMMA); } expect(p, TOK_RBRACE); s->var_decl.array_init = MAR_ALLOC_N(Expr*, ic); memcpy(s->var_decl.array_init, inits, sizeof(Expr*)*ic); s->var_decl.array_init_count = ic; free(inits); } } else { s->var_decl.type = base; if (match(p, TOK_ASSIGN)) s->var_decl.init = parse_expr(p); }
+static Stmt *parse_class(Parser *p) {
+    expect(p, TOK_CLASS);
+    Token *name = expect(p, TOK_IDENT);
+    SrcLoc loc = loc_of(name);
+    
+    // Create the ClassDecl structure in the AST
+    ClassDecl *c = MAR_ALLOC(ClassDecl);
+    c->name = MAR_STRDUP(name->value);
+    c->loc  = loc;
+
+    expect(p, TOK_LBRACE);
+
+    Field *fields = malloc(sizeof(Field) * 64);
+    Method *methods = malloc(sizeof(Method) * 64);
+    int fc = 0, mc = 0;
+
+    while (!check(p, TOK_RBRACE) && !check(p, TOK_EOF)) {
+        MarType *t = parse_type(p);
+        Token *m_name = expect(p, TOK_IDENT);
+        
+        if (check(p, TOK_LPAREN)) { // Method detected
+            p->pos -= 2; // Backtrack so parse_func can read type and name
+            methods[mc].name = MAR_STRDUP(m_name->value);
+            methods[mc].method = parse_func(p);
+            mc++;
+        } else { // Field detected
+            fields[fc].name = MAR_STRDUP(m_name->value);
+            fields[fc].type = t;
+            fc++;
+        }
+    }
+    expect(p, TOK_RBRACE);
+    
+    c->fields = fields; c->field_count = fc;
+    c->methods = methods; c->method_count = mc;
+    
+    // Return as a statement
+    Stmt *s = stmt_new(STMT_CLASS_DECL, loc);
+    s->class_decl = c;
     return s;
+}
+
+Program *parser_parse(Parser *p) {
+    Program *prog = MAR_ALLOC(Program);
+    FuncDecl **funcs = malloc(sizeof(FuncDecl*) * 64);
+    ClassDecl **classes = malloc(sizeof(ClassDecl*) * 64);
+    int fc = 0, cc = 0;
+
+    while (!check(p, TOK_EOF)) {
+        if (check(p, TOK_CLASS)) {
+            // Store classes in the new Program fields
+            Stmt *s = parse_class(p);
+            classes[cc++] = s->class_decl;
+        } else {
+            funcs[fc++] = parse_func(p);
+        }
+    }
+
+    prog->funcs = MAR_ALLOC_N(FuncDecl*, fc);
+    memcpy(prog->funcs, funcs, sizeof(FuncDecl*) * fc);
+    prog->func_count = fc;
+
+    prog->classes = MAR_ALLOC_N(ClassDecl*, cc);
+    memcpy(prog->classes, classes, sizeof(ClassDecl*) * cc);
+    prog->class_count = cc;
+
+    free(funcs);
+    free(classes);
+    return prog;
 }
 
 static Stmt *parse_stmt(Parser *p) {
