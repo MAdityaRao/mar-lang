@@ -3,30 +3,30 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*' 
+      - 'v*'
 
 permissions:
-  contents: write # Required for 'gh' to modify releases
+  contents: write
 
 jobs:
-  # STEP 1: Create the Release entry once
+  # 1. Create a DRAFT release first (Drafts are never immutable)
   create_release:
-    name: Create GitHub Release
+    name: Create Draft Release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Initialize Release
+      - name: Init Draft
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # This creates the tag and release structure first
-          gh release create ${{ github.ref_name }} --title "Release ${{ github.ref_name }}" --notes "Automated build." || echo "Already exists"
+          # The --draft flag prevents the release from becoming "Immutable"
+          gh release create ${{ github.ref_name }} --draft --title "Release ${{ github.ref_name }}" --notes "Automated build." || echo "Already exists"
 
-  # STEP 2: Build and Upload (Wait for Step 1)
+  # 2. Build and Upload to the Draft
   build:
     name: Build on ${{ matrix.os }}
-    needs: create_release # This is the magic line that prevents the 422 error
+    needs: create_release
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -41,21 +41,29 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Build Mar Compiler
-        run: make #
-
-      - name: Rename and Upload
+      - name: Build
+        run: make
+      - name: Upload
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Prepare the file based on the OS
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             mv bin/mar.exe ${{ matrix.asset_name }}
           else
             mv bin/mar ${{ matrix.asset_name }}
           fi
-          
-          # Upload to the pre-existing release
           gh release upload ${{ github.ref_name }} ${{ matrix.asset_name }} --clobber
+
+  # 3. Publish the release only after ALL uploads are done
+  publish_release:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Make Public
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit ${{ github.ref_name }} --draft=false
