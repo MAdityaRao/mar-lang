@@ -2,7 +2,7 @@
 set -e
 
 VERSION="v1.0.0"
-BASE="https://github.com/YOUR_USERNAME/mar-lang/releases/download/$VERSION"
+BASE="https://github.com/MAdityaRao/mar-lang/releases/download/$VERSION"
 
 OS=$(uname -s)
 ARCH=$(uname -m)
