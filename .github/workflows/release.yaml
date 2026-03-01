@@ -26,11 +26,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build Mar Compiler
-        run: make # Runs your Makefile
+        run: make # This creates bin/mar
 
       - name: Rename binary for release
         shell: bash
-        run: mv ${{ matrix.artifact_name }} ${{ matrix.asset_name }}
+        # Add 'bin/' before the source filename
+        run: mv bin/mar ${{ matrix.asset_name }}
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v1
@@ -38,3 +39,5 @@ jobs:
           files: ${{ matrix.asset_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      
