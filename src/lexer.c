@@ -179,6 +179,7 @@ Token *lexer_tokenize(Lexer *l) {
             case ']': push(l,TOK_RBRACKET,NULL,line,col); break;
             case ',': push(l,TOK_COMMA,NULL,line,col); break;
             case '&': push(l,TOK_AMPERSAND,NULL,line,col); break;
+            case '.': push(l,TOK_DOT,NULL,line,col); break;  /* <-- ADDED */
             default: {
                 SrcLoc loc = {line,col,l->filename};
                 error_emit(l->errors, ERR_LEXER, loc,
