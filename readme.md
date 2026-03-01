@@ -8,13 +8,13 @@
 ## What is Mar?
 
 Mar is a compiled, statically-typed programming language written in C.  
-You write clean, readable code in `.mar` files — the Mar compiler translates it into C,  
-which then compiles to a native binary using your system's C compiler (gcc or clang).
+You write clean, readable code in `.mar` files — one command compiles and runs your program instantly.  
+Behind the scenes, Mar translates your code to C and invokes gcc/clang automatically.
 
 **The result:** Fast native programs with a syntax that doesn't get in your way.
 
 ```
-Your Code (.mar)  →  Mar Compiler  →  C Code (.c)  →  gcc/clang  →  Native Binary
+mar run program.mar  →  Mar Compiler  →  C Code (.c)  →  gcc/clang  →  Run  →  Output
 ```
 
 ---
@@ -28,6 +28,10 @@ Your Code (.mar)  →  Mar Compiler  →  C Code (.c)  →  gcc/clang  →  Nati
 | `printf` / `scanf` complexity | Simple `print()` and `take()` |
 | Switch needs colons + break | Clean switch, auto-break inserted |
 | Pointer complexity for I/O | `take("%d", &x)` just works |
+| Structs need manual init boilerplate | `class` with `init()` method + `new` keyword |
+| Manual memory management for objects | Arena-allocated objects, zero leaks |
+| Verbose member access via `->` in C | Clean dot syntax: `player.health` |
+| Compile + link + run = 3 commands | `mar run program.mar` does everything |
 
 ---
 
@@ -85,6 +89,11 @@ Primes from 2 to 20:
 | Input | `take("%d", &x)` |
 | Break | `break` |
 | Return | `return 0` |
+| **Classes** ✨ | `class Player { int health ... }` |
+| **Object creation** ✨ | `Player p = new Player(100)` |
+| **Member access** ✨ | `p.health`, `p.damage(10)` |
+| **Class methods** ✨ | `void init(int h) { health = h }` |
+| **Custom types** ✨ | Use class name as a type in function params |
 
 ---
 
@@ -186,7 +195,8 @@ mar-lang/
 ├── examples/               ← Sample .mar programs
 │   ├── hello.mar           ← Hello World
 │   ├── switch_test.mar     ← Switch / case demo
-│   └── primes.mar          ← Prime numbers (shows all features)
+│   ├── primes.mar          ← Prime numbers (shows all features)
+│   └── cls.mar             ← Class / OOP demo
 │
 ├── tests/                  ← Test suite
 │   ├── integration/        ← Full .mar programs that should compile+run
@@ -217,6 +227,7 @@ The Mar compiler is a classic multi-pass compiler. Every `.mar` file goes throug
   │            │  Reads source text character by character.
   │            │  Produces a stream of Tokens.
   │            │  Example: "int x = 5" → [INT][IDENT:x][ASSIGN][INT_LIT:5]
+  │            │  Supports: dot operator (.), all operators, class/new keywords
   └─────┬──────┘
         │  Token[]
         ▼
@@ -225,16 +236,20 @@ The Mar compiler is a classic multi-pass compiler. Every `.mar` file goes throug
   │            │  Reads tokens. Builds an AST (Abstract Syntax Tree).
   │            │  Uses recursive descent parsing.
   │            │  Example: sees INT IDENT ASSIGN → creates VarDecl node
+  │            │  Handles: class declarations, new expressions, dot access
   └─────┬──────┘
         │  Program* (tree of nodes)
         ▼
   ┌──────────────┐
   │  CODE GEN    │  src/codegen_c.c
   │              │  Walks the AST. Writes equivalent C code.
-  │              │  for-range → while loop
-  │              │  print()  → printf()
-  │              │  take()   → scanf()
+  │              │  for-range  → while loop
+  │              │  print()    → printf()
+  │              │  take()     → scanf()
   │              │  switch without colons → valid C switch
+  │              │  class      → typedef struct + methods
+  │              │  new Foo()  → arena_alloc + Foo_init()
+  │              │  obj.field  → obj->field  (pointer deref)
   └─────┬────────┘
         │  output.c
         ▼
@@ -248,37 +263,35 @@ The Mar compiler is a classic multi-pass compiler. Every `.mar` file goes throug
 
 **Cross-cutting components used by every stage:**
 
-- `arena.c` — All memory is allocated in a single region (arena). One call frees everything. Zero memory leaks by design.
+- `arena.c` — All memory is allocated in a single region (arena). One call frees everything. Zero memory leaks by design. Objects created with `new` are also arena-allocated.
 - `error.c` — Errors from any stage are collected and printed together with the source line and a `^` caret pointing to the exact column.
 
 ---
 
 ## Usage
 
-### Compile a .mar file
+### Run a .mar program
+
+```bash
+mar run yourprogram.mar
+```
+
+That's it. Mar handles compilation and execution in one step — no separate compile, no manually invoking gcc, no intermediate files to manage.
+
+### What happens under the hood
+
+```bash
+mar run yourprogram.mar
+# 1. Parses yourprogram.mar into an AST
+# 2. Generates C code internally
+# 3. Invokes gcc/clang to compile it
+# 4. Runs the resulting binary
+```
+
+### Save the generated C (optional, for inspection)
 
 ```bash
 ./bin/mar yourprogram.mar -o yourprogram.c
-```
-
-This produces `yourprogram.c` — a valid C file you can inspect.
-
-### Compile the generated C to a binary
-
-```bash
-cc -o yourprogram yourprogram.c
-```
-
-### Run your program
-
-```bash
-./yourprogram
-```
-
-### All three steps in one line
-
-```bash
-./bin/mar yourprogram.mar -o /tmp/out.c && cc -o /tmp/out /tmp/out.c && /tmp/out
 ```
 
 ---
@@ -286,25 +299,30 @@ cc -o yourprogram yourprogram.c
 ## Compiler Flags
 
 ```
-Usage: mar <file.mar> [options]
+Usage: mar run <file.mar>
+       mar <file.mar> [options]
 
 Options:
-  -o <file>        Output file name          (default: a.out.c)
-  --dump-tokens    Print all tokens and exit (debug: see what the lexer sees)
-  --dump-ast       Print AST summary and exit (debug: see what the parser built)
+  run <file>       Compile and run a .mar file in one step
+  -o <file>        Save generated C to a file  (default: a.out.c)
+  --dump-tokens    Print all tokens and exit   (debug: see what the lexer sees)
+  --dump-ast       Print AST summary and exit  (debug: see what the parser built)
   --help           Show this help message
 ```
 
-### Debug examples
+### Examples
 
 ```bash
+# Run a program — the standard way
+mar run examples/primes.mar
+
 # See every token the lexer produces
 ./bin/mar examples/primes.mar --dump-tokens
 
 # See the AST (function names and structure)
 ./bin/mar examples/primes.mar --dump-ast
 
-# See the generated C code
+# Save and inspect the generated C code
 ./bin/mar examples/primes.mar -o /tmp/out.c && cat /tmp/out.c
 ```
 
@@ -320,6 +338,7 @@ float y         ← double-precision float
 char c          ← single character
 bool flag       ← true or false
 int arr[5]      ← array of 5 integers
+Player p        ← instance of class Player (pointer under the hood)
 ```
 
 ### Variables
@@ -328,6 +347,7 @@ int arr[5]      ← array of 5 integers
 int x           ← declare (value is 0)
 int x = 10      ← declare and initialize
 int arr[3] = {1, 2, 3}   ← array with initializer
+Player p = new Player(100)  ← object initialized via init()
 ```
 
 ### Operators
@@ -337,6 +357,7 @@ int arr[3] = {1, 2, 3}   ← array with initializer
 ==  !=  <   >   <=  >=   ← comparison
 &&  ||  !                ← logical
 =   +=  -=  *=  /=  %=   ← assignment
+.                        ← member access (obj.field, obj.method())
 ```
 
 ### If / Else
@@ -425,6 +446,68 @@ int main()
 ```
 
 Functions can call each other in any order — no forward declarations needed.
+
+### Classes ✨ New
+
+Mar supports object-oriented programming through the `class` keyword.  
+Classes can have **fields** (data) and **methods** (functions that operate on that data).
+
+```mar
+class Player {
+    int health
+    int score
+
+    void init(int h) {
+        health = h
+        score = 0
+    }
+
+    void damage(int amount) {
+        health = health - amount
+    }
+
+    int is_alive() {
+        if(health > 0)
+            return 1
+        return 0
+    }
+}
+```
+
+**Creating an object with `new`:**
+
+```mar
+Player p = new Player(100)
+```
+
+This calls `init(100)` automatically — `health` is set to `100`, `score` to `0`.
+
+**Accessing fields and calling methods:**
+
+```mar
+p.damage(20)
+print("HP: %d\n", p.health)
+
+if(p.is_alive())
+    print("Still fighting\n")
+```
+
+**How it compiles to C:**
+
+Mar translates classes to C structs and prefixed functions transparently:
+
+| Mar | Generated C |
+|---|---|
+| `class Player { int health }` | `typedef struct { int health; } Player;` |
+| `new Player(100)` | `arena_alloc(g_arena, sizeof(Player)); Player_init(obj, 100)` |
+| `p.damage(20)` | `Player_damage(p, 20)` |
+| `p.health` | `p->health` |
+
+**Rules for classes:**
+- The `init` method is always called by `new` — always define one
+- Methods inside a class body use field names directly (no `this->` needed in Mar)
+- Class instances are heap-allocated via the arena — no manual `free()` needed
+- Classes must be defined before the functions that use them
 
 ### Print
 
@@ -595,6 +678,52 @@ int main()
 }
 ```
 
+### Classes — RPG Player ✨ New
+
+```mar
+class Player {
+    int health
+    int score
+    int kills
+
+    void init(int h) {
+        health = h
+        score  = 0
+        kills  = 0
+    }
+
+    void fight(int enemy_level) {
+        health = health - enemy_level
+        score  = score + enemy_level
+        kills  = kills + 1
+    }
+}
+
+int main()
+{
+    Player hero = new Player(100)
+
+    for i in range(1, 6)
+    {
+        hero.fight(i)
+        print("After fight %d: HP=%d Score=%d\n", i, hero.health, hero.score)
+    }
+
+    print("Total kills: %d\n", hero.kills)
+    return 0
+}
+```
+
+**Output:**
+```
+After fight 1: HP=99 Score=1
+After fight 2: HP=97 Score=3
+After fight 3: HP=94 Score=6
+After fight 4: HP=90 Score=10
+After fight 5: HP=85 Score=15
+Total kills: 5
+```
+
 ---
 
 ## Building from Source
@@ -626,10 +755,12 @@ The compiler has a clean separation of stages. Here is where each feature lives:
 | What to change | Where |
 |---|---|
 | Add a new keyword | `src/lexer.c` → `KEYWORDS[]` array |
+| Add a new single-char token | `src/lexer.c` → single-char `switch` at the bottom of `lexer_tokenize` |
 | Add new syntax | `src/parser.c` → add a case in `parse_stmt()` |
 | Add a new AST node | `include/mar/ast.h` → add to `StmtKind` or `ExprKind` enum + union |
 | Change how something compiles to C | `src/codegen_c.c` → add a case in `emit_stmt()` or `emit_expr()` |
 | Add a new type | `include/mar/ast.h` → add to `TypeKind` enum |
+| Add a class feature | `src/parser.c` → `parse_class()`, `src/codegen_c.c` → `emit_class()` |
 | Change error messages | `src/error.c` |
 
 **Order to read the source code if you're learning:**
@@ -657,9 +788,13 @@ The compiler has a clean separation of stages. Here is where each feature lives:
 - [x] take() → scanf()
 - [x] Arrays with initializer syntax
 - [x] Compound assignment operators (+=, -=, etc.)
+- [x] **Classes with fields and methods** ✨
+- [x] **`new` keyword for object creation** ✨
+- [x] **Dot operator for member access (obj.field, obj.method())** ✨
+- [x] **Custom class types usable in variable declarations** ✨
 - [ ] String type
 - [ ] Nested functions / closures
-- [ ] Structs / records
+- [ ] Inheritance
 - [ ] Multiple source files / import system
 - [ ] Standard library
 - [ ] LLVM IR backend (for better optimization)
@@ -673,13 +808,19 @@ The compiler has a clean separation of stages. Here is where each feature lives:
 C gives us portability (works on Mac M1, Linux x86, Windows) and we get GCC/Clang's optimizers for free. The generated C is readable and debuggable.
 
 **Why use an arena allocator?**  
-All AST nodes are allocated in a single memory region. At the end of compilation, one call frees everything. This makes the compiler fast and eliminates memory leaks by design — no per-node `free()` needed anywhere.
+All AST nodes are allocated in a single memory region. At the end of compilation, one call frees everything. This makes the compiler fast and eliminates memory leaks by design — no per-node `free()` needed anywhere. Objects created with `new` in Mar programs are also arena-allocated at runtime for the same reason.
 
 **Why no semicolons?**  
 Semicolons are noise. The parser uses newlines and the structure of statements to know where each statement ends. This makes code cleaner and reduces syntax errors.
 
 **Why auto-insert break in switch?**  
 C's switch fallthrough is one of the most common sources of bugs. Mar inserts `break` automatically after each case unless you already wrote one, preventing accidental fallthrough while still letting you use `break` explicitly.
+
+**Why does `new` use an arena instead of `malloc`?**  
+Arena allocation means all objects live for the lifetime of the program and are freed in a single operation — no garbage collector, no `free()` calls, no use-after-free bugs. This keeps the runtime simple while staying memory-safe in practice.
+
+**Why does `obj.field` compile to `obj->field` in C?**  
+Class instances in Mar are always pointers (allocated on the arena). The dot operator in Mar is always a pointer dereference under the hood — the compiler handles this transparently so you never have to think about `->` vs `.`.
 
 ---
 
@@ -704,4 +845,5 @@ If something is not working:
 2. Make sure the compiler is built: `ls bin/mar`
 3. If `bin/mar` is missing, run: `make clean && make`
 4. If `make` fails, check that Xcode tools are installed: `xcode-select --install`
-5. Open an issue on GitHub with the exact error message
+5. Test with a simple program: `mar run examples/hello.mar`
+6. Open an issue on GitHub with the exact error message
