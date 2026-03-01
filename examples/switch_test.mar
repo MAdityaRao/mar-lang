@@ -1,0 +1,16 @@
+int main()
+{
+    int n = 2
+    switch(n)
+    {
+        case 1
+            print("One\n")
+            break
+        case 2
+            print("Two\n")
+            break
+        default
+            print("Other\n")
+    }
+    return 0
+}
