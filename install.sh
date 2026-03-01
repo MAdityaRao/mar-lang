@@ -18,7 +18,8 @@ else
     echo "Windows users: install WSL first, then re-run this script."
     exit 1
 fi
-
+echo 'function runmar() { mar "$1" -o /tmp/mar_out.c && cc -o /tmp/mar_out /tmp/mar_out.c && /tmp/mar_out }' >> ~/.zshrc
+echo 'function runmar() { mar "$1" -o /tmp/mar_out.c && cc -o /tmp/mar_out /tmp/mar_out.c && /tmp/mar_out }' >> ~/.bash_profile
 echo "Installing Mar $VERSION for $OS/$ARCH..."
 curl -L "$BASE/$BINARY" -o mar_tmp
 chmod +x mar_tmp

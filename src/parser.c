@@ -322,13 +322,39 @@ static Stmt *parse_var_decl(Parser *p) {
             s->var_decl.array_init_count = ic;
             free(inits);
         }
-    } else {
+        } else {
         s->var_decl.type = base;
         if (match(p, TOK_ASSIGN))
             s->var_decl.init = parse_expr(p);
     }
-    return s;
+
+    // Support multiple declarations: int a, b, c
+    if (!check(p, TOK_COMMA)) return s;
+
+    // Wrap first decl + rest into a block
+    Stmt *block = stmt_new(STMT_BLOCK, loc);
+    Stmt **stmts = malloc(sizeof(Stmt*) * 64);
+    int count = 0;
+    stmts[count++] = s;
+
+    while (match(p, TOK_COMMA)) {
+        Token *extra = expect(p, TOK_IDENT);
+        SrcLoc eloc = loc_of(extra);
+        Stmt *es = stmt_new(STMT_VAR_DECL, eloc);
+        es->var_decl.name = MAR_STRDUP(extra->value);
+        es->var_decl.type = base;
+        if (match(p, TOK_ASSIGN))
+            es->var_decl.init = parse_expr(p);
+        stmts[count++] = es;
+    }
+
+    block->block.stmts = MAR_ALLOC_N(Stmt*, count);
+    memcpy(block->block.stmts, stmts, sizeof(Stmt*) * count);
+    block->block.count = count;
+    free(stmts);
+    return block;
 }
+
 
 static Stmt *parse_stmt(Parser *p) {
     Token *t = peek(p);
