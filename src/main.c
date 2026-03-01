@@ -23,19 +23,36 @@ static char *read_file(const char *path) {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        fprintf(stderr, "Mar Compiler v0.1\n");
-        fprintf(stderr, "Usage: mar <file.mar> [-o output.c]\n");
-        fprintf(stderr, "       mar <file.mar> --dump-tokens\n");
-        fprintf(stderr, "       mar <file.mar> --dump-ast\n");
+        fprintf(stderr, "Mar Compiler v1.0.1\n");
+        fprintf(stderr, "Usage: mar <file.mar> [options]\n");
+        fprintf(stderr, "       mar run <file.mar>   (Compile and run immediately)\n");
+        fprintf(stderr, "Options:\n");
+        fprintf(stderr, "  -o <file>        Output C file name\n");
+        fprintf(stderr, "  --dump-tokens    Print lexer output\n");
+        fprintf(stderr, "  --dump-ast       Print parser output\n");
         return 1;
     }
 
-    const char *input  = argv[1];
-    const char *output = "a.out.c";
+    bool run_immediately = false;
+    int arg_offset = 1;
+
+    // Check if the first argument is 'run'
+    if (strcmp(argv[1], "run") == 0) {
+        if (argc < 3) {
+            fprintf(stderr, "Error: 'mar run' requires a filename.\n");
+            return 1;
+        }
+        run_immediately = true;
+        arg_offset = 2; // Shift indices to ignore 'run'
+    }
+
+    const char *input  = argv[arg_offset];
+    const char *output = run_immediately ? "/tmp/mar_temp.c" : "a.out.c";
     bool dump_tokens   = false;
     bool dump_ast      = false;
 
-    for (int i = 2; i < argc; i++) {
+    // Start loop after the input filename
+    for (int i = arg_offset + 1; i < argc; i++) {
         if (strcmp(argv[i], "-o") == 0 && i+1 < argc) output = argv[++i];
         else if (strcmp(argv[i], "--dump-tokens") == 0) dump_tokens = true;
         else if (strcmp(argv[i], "--dump-ast")    == 0) dump_ast    = true;
@@ -57,7 +74,6 @@ int main(int argc, char **argv) {
                 tokens[i].line, tokens[i].col,
                 token_kind_str(tokens[i].kind),
                 tokens[i].value ? tokens[i].value : "");
-        printf("[%3d:%2d] EOF\n", tokens[lexer->token_count-1].line, 0);
         arena_destroy(g_arena); free(source); return 0;
     }
 
@@ -82,7 +98,21 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    printf("Compiled: %s → %s\n", input, output);
+    /* Execution Logic for 'mar run' */
+    if (run_immediately) {
+        char cmd[512];
+        // 1. Compile generated C to a binary in /tmp
+        snprintf(cmd, sizeof(cmd), "cc %s -o /tmp/mar_bin", output);
+        if (system(cmd) != 0) {
+            fprintf(stderr, "Error: C compilation failed.\n");
+            return 1;
+        }
+        // 2. Execute the binary
+        system("/tmp/mar_bin");
+    } else {
+        printf("Compiled: %s → %s\n", input, output);
+    }
+
     arena_destroy(g_arena);
     free(source);
     return 0;

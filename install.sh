@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-VERSION="v1.0.1"
+VERSION="v1.0.2"
 BASE="https://github.com/MAdityaRao/mar-lang/releases/download/$VERSION"
 
 OS=$(uname -s)
@@ -13,13 +13,14 @@ elif [ "$OS" = "Darwin" ]; then
     BINARY="mar-macos-x86_64"
 elif [ "$OS" = "Linux" ]; then
     BINARY="mar-linux-x86_64"
+elif [[ "$OS" == *"MINGW"* ]] || [[ "$OS" == *"MSYS"* ]]; then
+    BINARY="mar-windows-x64.exe"
+    # ... logic to move to a Windows path or suggest adding to PATH
 else
     echo "Unsupported OS: $OS"
     echo "Windows users: install WSL first, then re-run this script."
     exit 1
 fi
-echo 'function runmar() { mar "$1" -o /tmp/mar_out.c && cc -o /tmp/mar_out /tmp/mar_out.c && /tmp/mar_out }' >> ~/.zshrc
-echo 'function runmar() { mar "$1" -o /tmp/mar_out.c && cc -o /tmp/mar_out /tmp/mar_out.c && /tmp/mar_out }' >> ~/.bash_profile
 echo "Installing Mar $VERSION for $OS/$ARCH..."
 curl -L "$BASE/$BINARY" -o mar_tmp
 chmod +x mar_tmp

@@ -28,5 +28,12 @@ clean:
 
 release: clean
 	$(MAKE) CFLAGS="-std=c11 -Wall -Wextra -O2 -Iinclude" all
+# Add this to the end of your Makefile
 
-.PHONY: all clean dirs release
+test: all
+	@echo "Running integration tests..."
+	./bin/mar run examples/hello.mar
+	./bin/mar run examples/primes.mar
+	@echo "All tests passed!"
+
+.PHONY: all clean dirs release test
