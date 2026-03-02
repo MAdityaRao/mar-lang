@@ -167,8 +167,28 @@ int main(int argc, char **argv) {
             return 1;
         }
     } else {
-        printf("\033[1;32m✓\033[0m Compiled: %s → %s\n", input, output);
-        printf("  To run: cc %s -lm -o mar_prog && ./mar_prog\n", output);
+        /* We want to compile to a native binary and delete the intermediate C file */
+        char compile_cmd[2048];
+        char bin_name[256];
+        
+        /* Figure out the final binary name (e.g. change "a.out.c" to "a.out") */
+        snprintf(bin_name, sizeof(bin_name), "%s", output);
+        char *dot_c = strstr(bin_name, ".c");
+        if (dot_c) *dot_c = '\0'; /* strip .c extension */
+        else snprintf(bin_name, sizeof(bin_name), "mar_prog");
+
+        /* Tell GCC to compile it silently */
+        snprintf(compile_cmd, sizeof(compile_cmd), "cc %s -o %s -lm", output, bin_name);
+        
+        int cc_ret = system(compile_cmd);
+        if (cc_ret == 0) {
+            remove(output);
+            remove(bin_name); /* Silently delete the intermediate .c file! */
+            printf("\033[1;32m✓\033[0m Successfully built native binary: \033[1m%s\033[0m\n", bin_name);
+        } else {
+            fprintf(stderr, "\033[1;31mError:\033[0m C compilation failed. Generated C is at: %s\n", output);
+            return 1;
+        }
     }
 
     arena_destroy(g_arena);

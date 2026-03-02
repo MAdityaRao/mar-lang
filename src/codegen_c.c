@@ -458,51 +458,54 @@ static void emit_expr(CGenCtx *c, Expr *e)
 static void emit_stmt(CGenCtx *c, Stmt *s)
 {
     switch (s->kind) {
-
+        
         case STMT_VAR_DECL: {
-            ind(c);
             MarType *t = s->var_decl.type;
-
-            if (t && t->kind == TY_ARRAY) {
-                emit_type(c, t->elem);
-                fprintf(c->out, " %s[%d]", s->var_decl.name,
-                        t->size > 0 ? t->size : 0);
-                if (s->var_decl.array_init) {
-                    fprintf(c->out, " = {");
-                    for (int i = 0; i < s->var_decl.array_init_count; i++) {
-                        if (i) fprintf(c->out, ", ");
-                        emit_expr(c, s->var_decl.array_init[i]);
-                    }
-                    fputc('}', c->out);
-                }
-                fprintf(c->out, ";\n");
-                /*
-                 * Companion length variable so len(arr) and for-in-array
-                 * loops can query the element count at runtime.
-                 */
+            
+            for (int d = 0; d < s->var_decl.decl_count; d++) {
                 ind(c);
-                int arr_len = s->var_decl.array_init_count > 0
-                                  ? s->var_decl.array_init_count
-                                  : (t->size > 0 ? t->size : 0);
-                fprintf(c->out, "int64_t _mar_len_%s = %d;\n",
-                        s->var_decl.name, arr_len);
-                return;
-            }
+                VarDeclItem *item = &s->var_decl.decls[d];
+                bool is_array = (t && t->kind == TY_ARRAY) || (item->array_size != 0);
 
-            if (t && t->kind == TY_UNKNOWN && t->name)
-                scope_push(s->var_decl.name, t->name);
-            if (t && t->kind == TY_STRING)
-                strvar_push(s->var_decl.name);
+                if (is_array) {
+                    MarType *elem_t = (t && t->kind == TY_ARRAY) ? t->elem : t;
+                    emit_type(c, elem_t);
+                    int sz = item->array_size > 0 ? item->array_size : 0;
+                    fprintf(c->out, " %s[%d]", item->name, sz);
+                    
+                    if (item->array_init) {
+                        fprintf(c->out, " = {");
+                        for (int i = 0; i < item->array_init_count; i++) {
+                            if (i) fprintf(c->out, ", ");
+                            emit_expr(c, item->array_init[i]);
+                        }
+                        fputc('}', c->out);
+                    }
+                    fprintf(c->out, ";\n");
+                    
+                    /* Companion length variable */
+                    ind(c);
+                    int arr_len = item->array_init_count > 0 ? item->array_init_count : sz;
+                    fprintf(c->out, "int64_t _mar_len_%s = %d;\n", item->name, arr_len);
+                } else {
+                    if (t && t->kind == TY_UNKNOWN && t->name)
+                        scope_push(item->name, t->name);
+                    if (t && t->kind == TY_STRING)
+                        strvar_push(item->name);
 
-            emit_type(c, t);
-            fprintf(c->out, " %s", s->var_decl.name);
-            if (s->var_decl.init) {
-                fprintf(c->out, " = ");
-                emit_expr(c, s->var_decl.init);
+                    emit_type(c, t);
+                    fprintf(c->out, " %s", item->name);
+                    
+                    if (item->init) {
+                        fprintf(c->out, " = ");
+                        emit_expr(c, item->init);
+                    }
+                    fprintf(c->out, ";\n");
+                }
             }
-            fprintf(c->out, ";\n");
             break;
         }
+           
 
         case STMT_ASSIGN: {
             ind(c);

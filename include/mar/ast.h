@@ -151,7 +151,14 @@ typedef enum {
     STMT_MULTI_ASSIGN,  /* int a, int b = fn() — FEATURE 7 */
     STMT_CLASS_DECL,    /* class Foo { }       — stored on Program too */
 } StmtKind;
-
+/* ─── Variable Declarator ─────────────────────────────────────────────────── */
+typedef struct {
+    char  *name;
+    Expr  *init;
+    Expr **array_init;
+    int    array_init_count;
+    int    array_size;
+} VarDeclItem;
 /* ─── Switch case clause ──────────────────────────────────────────────────── */
 typedef struct {
     Expr  *value;       /* NULL  → default */
@@ -167,11 +174,9 @@ struct Stmt {
 
         /* STMT_VAR_DECL */
         struct {
-            MarType  *type;
-            char     *name;
-            Expr     *init;               /* NULL if no initializer */
-            Expr    **array_init;         /* {e1, e2, ...} initializer elements */
-            int       array_init_count;
+            MarType     *type;
+            VarDeclItem *decls;
+            int          decl_count;
         } var_decl;
 
         /* STMT_ASSIGN */

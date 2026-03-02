@@ -438,29 +438,23 @@ static Stmt *parse_block(Parser *p) {
     return s;
 }
 
-/* ── Variable declaration ─────────────────────────────────────────────────── */
 static Stmt *parse_var_decl(Parser *p) {
     Token  *first = peek(p);
     SrcLoc  loc   = loc_of(first);
     MarType *type = parse_type(p);
 
-    /* FEATURE 7: multi-assign  int a, int b = swap(x, y)
-       Detect: after parsing type + name, if comma follows and next looks like
-       'type ident =' then it's a multi-assign. */
     Token *name_tok = expect(p, TOK_IDENT);
 
-    /* Check for multi-assign: type name COMMA type name ASSIGN expr */
+    /* FEATURE 7: Check for multi-assign like: int a, int b = swap() */
     if (check(p, TOK_COMMA)) {
         int save = p->pos;
         advance(p); /* consume comma */
         if (is_type_token(peek(p)->kind)) {
-            /* Try to parse another type + ident */
             int save2 = p->pos;
             MarType *type2 = parse_type(p);
             if (check(p, TOK_IDENT)) {
                 Token *name2_tok = advance(p);
                 if (check(p, TOK_ASSIGN)) {
-                    /* It's a multi-assign! Collect all name/type pairs */
                     char    **names = malloc(sizeof(char*)    * 16);
                     MarType **types = malloc(sizeof(MarType*) * 16);
                     int count = 2;
@@ -468,7 +462,6 @@ static Stmt *parse_var_decl(Parser *p) {
                     types[0] = type;
                     names[1] = MAR_STRDUP(name2_tok->value);
                     types[1] = type2;
-                    /* more pairs? */
                     while (check(p, TOK_COMMA)) {
                         advance(p);
                         if (!is_type_token(peek(p)->kind)) { p->pos--; break; }
@@ -480,77 +473,83 @@ static Stmt *parse_var_decl(Parser *p) {
                     Expr *rhs = parse_expr(p);
                     match(p, TOK_SEMICOLON);
                     Stmt *s = stmt_new(STMT_MULTI_ASSIGN, loc);
-                    s->multi_assign.names = MAR_ALLOC_N(char*,    count);
+                    s->multi_assign.names = MAR_ALLOC_N(char*, count);
                     s->multi_assign.types = MAR_ALLOC_N(MarType*, count);
-                    memcpy(s->multi_assign.names, names, sizeof(char*)    * count);
+                    memcpy(s->multi_assign.names, names, sizeof(char*) * count);
                     memcpy(s->multi_assign.types, types, sizeof(MarType*) * count);
                     s->multi_assign.count = count;
                     s->multi_assign.rhs   = rhs;
                     free(names); free(types);
                     return s;
                 }
-                /* Not a multi-assign, backtrack */
                 p->pos = save2;
-                (void)type2;
             } else {
                 p->pos = save2;
-                (void)type2;
             }
         }
-        /* backtrack the comma */
-        p->pos = save;
-    }
-    char name_buf[512];
-    snprintf(name_buf, sizeof(name_buf), "%s", name_tok->value);
-
-    while (check(p, TOK_COMMA)) {
-        advance(p); 
-        Token *next_var = expect(p, TOK_IDENT);
-        strncat(name_buf, ", ", sizeof(name_buf) - strlen(name_buf) - 1);
-        strncat(name_buf, next_var->value, sizeof(name_buf) - strlen(name_buf) - 1);
+        p->pos = save; /* Not a multi-assign, backtrack the comma */
     }
 
-    Stmt *s        = stmt_new(STMT_VAR_DECL, loc);
-    s->var_decl.type = type;
-    s->var_decl.name = MAR_STRDUP(name_buf);
-    s->var_decl.init = NULL;
-    s->var_decl.array_init       = NULL;
-    s->var_decl.array_init_count = 0;
+    /* Standard variable declaration(s): parse one or more declarators */
+    VarDeclItem *decls = malloc(sizeof(VarDeclItem) * 32);
+    int decl_count = 0;
 
-    /* Handle int arr[N] = ... style (array size in declaration) */
-    if (type->kind != TY_ARRAY && check(p, TOK_LBRACKET)) {
-        advance(p);
-        int size = 0;
-        if (check(p, TOK_INT_LIT)) {
-            size = atoi(advance(p)->value);
-        }
-        expect(p, TOK_RBRACKET);
-        s->var_decl.type = type_array(type, size);
-    }
+    while (1) {
+        VarDeclItem *item = &decls[decl_count++];
+        item->name = MAR_STRDUP(name_tok->value);
+        item->init = NULL;
+        item->array_init = NULL;
+        item->array_init_count = 0;
+        item->array_size = 0;
 
-    if (match(p, TOK_ASSIGN)) {
-        if (check(p, TOK_LBRACE)) {
-            /* array initializer: { e1, e2, ... } */
+        if (type->kind != TY_ARRAY && check(p, TOK_LBRACKET)) {
             advance(p);
-            Expr **elems = malloc(sizeof(Expr*) * 128);
-            int ec = 0;
-            while (!check(p, TOK_RBRACE) && !check(p, TOK_EOF)) {
-                elems[ec++] = parse_expr(p);
-                if (!check(p, TOK_RBRACE)) expect(p, TOK_COMMA);
+            if (check(p, TOK_INT_LIT)) {
+                item->array_size = atoi(advance(p)->value);
             }
-            expect(p, TOK_RBRACE);
-            s->var_decl.array_init = MAR_ALLOC_N(Expr*, ec);
-            memcpy(s->var_decl.array_init, elems, sizeof(Expr*) * ec);
-            s->var_decl.array_init_count = ec;
-            free(elems);
+            expect(p, TOK_RBRACKET);
+        } else if (type->kind == TY_ARRAY) {
+            item->array_size = type->size;
+        }
+
+        if (match(p, TOK_ASSIGN)) {
+            if (check(p, TOK_LBRACE)) {
+                advance(p);
+                Expr **elems = malloc(sizeof(Expr*) * 128);
+                int ec = 0;
+                while (!check(p, TOK_RBRACE) && !check(p, TOK_EOF)) {
+                    elems[ec++] = parse_expr(p);
+                    if (!check(p, TOK_RBRACE)) expect(p, TOK_COMMA);
+                }
+                expect(p, TOK_RBRACE);
+                item->array_init = MAR_ALLOC_N(Expr*, ec);
+                memcpy(item->array_init, elems, sizeof(Expr*) * ec);
+                item->array_init_count = ec;
+                free(elems);
+            } else {
+                item->init = parse_expr(p);
+            }
+        }
+
+        /* Check if there are more variables on this line */
+        if (match(p, TOK_COMMA)) {
+            name_tok = expect(p, TOK_IDENT);
         } else {
-            s->var_decl.init = parse_expr(p);
+            break;
         }
     }
+
     match(p, TOK_SEMICOLON);
+
+    Stmt *s = stmt_new(STMT_VAR_DECL, loc);
+    s->var_decl.type = type;
+    s->var_decl.decls = MAR_ALLOC_N(VarDeclItem, decl_count);
+    memcpy(s->var_decl.decls, decls, sizeof(VarDeclItem) * decl_count);
+    s->var_decl.decl_count = decl_count;
+    free(decls);
+
     return s;
 }
-
 /* ── Function declaration ─────────────────────────────────────────────────── */
 static FuncDecl *parse_func(Parser *p) {
     FuncDecl *f = MAR_ALLOC(FuncDecl);
