@@ -39,42 +39,50 @@ jobs:
           - os: ubuntu-latest
             asset_name: mar-linux-x86_64
 
-          - os: macos-latest        # arm64 (M1–M5)
+          - os: macos-latest        # ARM64 (Apple Silicon)
             asset_name: mar-macos-arm64
+            flags: ""
 
-          - os: macos-13            # x86_64 (Intel)
+          - os: macos-latest        # Cross-compile for Intel x86_64
             asset_name: mar-macos-x86_64
+            flags: "-target x86_64-apple-macos11"
 
-          - os: windows-latest
+          - os: windows-latest      # Windows x64
             asset_name: mar-windows-x64.exe
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install MinGW (Windows only)
+      - name: Setup GCC (Windows)
         if: matrix.os == 'windows-latest'
-        run: |
-          choco install mingw -y
-          echo "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        uses: egor-tensin/setup-gcc@v1
+        with:
+          platform: x64
 
       - name: Build
         shell: bash
         run: |
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+          # Ensure directories exist before make runs
+          mkdir -p bin build
+          
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            # Use cross-compilation flags if provided
+            make CFLAGS="-Wall -Wextra -std=c11 -Iinclude ${{ matrix.flags }}"
+          elif [ "${{ matrix.os }}" = "windows-latest" ]; then
+            # Force gcc and manual move to handle .exe extension
             make CC=gcc
           else
             make
           fi
 
-      - name: Rename binary
+      - name: Prepare Binary
         shell: bash
         run: |
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            if   [ -f "bin/mar.exe" ]; then mv bin/mar.exe "${{ matrix.asset_name }}"
-            elif [ -f "bin/mar"     ]; then mv bin/mar     "${{ matrix.asset_name }}"
-            else echo "Binary not found in bin/" && exit 1
-            fi
+            # Windows 'make' may produce mar or mar.exe depending on environment
+            if [ -f "bin/mar.exe" ]; then mv bin/mar.exe "${{ matrix.asset_name }}";
+            else mv bin/mar "${{ matrix.asset_name }}"; fi
           else
             mv bin/mar "${{ matrix.asset_name }}"
           fi
