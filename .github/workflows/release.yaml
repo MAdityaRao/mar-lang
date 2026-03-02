@@ -9,21 +9,26 @@ permissions:
   contents: write
 
 jobs:
-  # 1. Create a DRAFT release first (Drafts are never immutable)
+
+  # ── 1. Create a draft release first ────────────────────────────────────────
   create_release:
     name: Create Draft Release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Init Draft
+
+      - name: Create draft
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # The --draft flag prevents the release from becoming "Immutable"
-          gh release create ${{ github.ref_name }} --draft --title "Release ${{ github.ref_name }}" --notes "Automated build." || echo "Already exists"
+          gh release create ${{ github.ref_name }} \
+            --draft \
+            --title "Release ${{ github.ref_name }}" \
+            --notes "Automated build." \
+          || echo "Release already exists, continuing."
 
-  # 2. Build and Upload to the Draft
+  # ── 2. Build each platform and upload to the draft ─────────────────────────
   build:
     name: Build on ${{ matrix.os }}
     needs: create_release
@@ -39,32 +44,36 @@ jobs:
             asset_name: mar-windows-x64.exe
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install MinGW (Windows only)
+        if: matrix.os == 'windows-latest'
+        run: choco install mingw -y
+
       - name: Build
         run: make
-      - name: Upload
+
+      - name: Upload binary
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Detect the binary regardless of extension
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             if [ -f "bin/mar.exe" ]; then
               mv bin/mar.exe ${{ matrix.asset_name }}
             elif [ -f "bin/mar" ]; then
               mv bin/mar ${{ matrix.asset_name }}
             else
-              echo "Error: Binary not found in bin/" && exit 1
+              echo "Error: binary not found in bin/" && exit 1
             fi
           else
             mv bin/mar ${{ matrix.asset_name }}
           fi
-          
-          # Upload to the draft release
+
           gh release upload ${{ github.ref_name }} ${{ matrix.asset_name }} --clobber
 
-  # 3. Publish the release only after ALL uploads are done
+  # ── 3. Publish only after all uploads succeed ───────────────────────────────
   publish_release:
     name: Publish Release
     needs: build
@@ -72,7 +81,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Make Public
+
+      - name: Publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit ${{ github.ref_name }} --draft=false
