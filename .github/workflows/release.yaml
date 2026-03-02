@@ -24,8 +24,7 @@ jobs:
           gh release create ${{ github.ref_name }} \
             --draft \
             --title "Mar ${{ github.ref_name }}" \
-            --notes "See [install instructions](https://github.com/${{ github.repository }}#installation)." \
-          || echo "Release already exists, continuing."
+            --notes "See [install instructions](https://github.com/${{ github.repository }}#installation)."
 
   # ── 2. Build all platforms ───────────────────────────────────────────────
   build:
@@ -54,48 +53,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Verified Marketplace action for Windows GCC/Make
-      - name: Setup MSYS2 (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            mingw-w64-x86_64-gcc
-            make
-
       - name: Build
         shell: bash
         run: |
-          # Ensure directories exist before make runs
+          # Create directories manually to ensure no permission issues [cite: 3, 4]
           mkdir -p bin build
           
-          if [ "${{ matrix.os }}" = "macos-latest" ]; then
-            make CFLAGS="-Wall -Wextra -std=c11 -Iinclude ${{ matrix.flags }}"
-          elif [ "${{ matrix.os }}" = "windows-latest" ]; then
-            # Using the MSYS2 provided gcc
-            make CC=gcc
-          else
-            make
-          fi
-
-      - name: Prepare Binary
-        shell: bash
-        run: |
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            # Handle Windows .exe naming conventions
-            if [ -f "bin/mar.exe" ]; then mv bin/mar.exe "${{ matrix.asset_name }}";
-            else mv bin/mar "${{ matrix.asset_name }}"; fi
+            # ZERO-ACTION WINDOWS SETUP:
+            # Manually inject the pre-installed MinGW path into the runner's PATH
+            export PATH="/c/msys64/mingw64/bin:/c/msys64/usr/bin:$PATH"
+            [cite_start]make CC=gcc [cite: 1]
+          elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+            [cite_start]make CFLAGS="-Wall -Wextra -std=c11 -Iinclude ${{ matrix.flags }}" [cite: 1]
           else
-            mv bin/mar "${{ matrix.asset_name }}"
+            [cite_start]make [cite: 1]
           fi
 
-      - name: Upload binary
+      - name: Prepare and Upload Binary
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            # Windows 'make' may produce mar or mar.exe; check for both [cite: 1]
+            if [ -f "bin/mar.exe" ]; then
+              mv bin/mar.exe "${{ matrix.asset_name }}"
+            else
+              mv bin/mar "${{ matrix.asset_name }}"
+            fi
+          else
+            mv bin/mar "${{ matrix.asset_name }}" [cite: 1]
+          fi
+          
+          # Upload directly to the draft release created in Step 1
           gh release upload ${{ github.ref_name }} "${{ matrix.asset_name }}" --clobber
 
   # ── 3. Upload install scripts ────────────────────────────────────────────
