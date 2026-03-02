@@ -2,7 +2,7 @@
 # Run in PowerShell as Administrator:
 #   irm https://github.com/MAdityaRao/mar-lang/releases/download/v1.5.3/install.ps1 | iex
 
-$VERSION = "v1.5.3"
+$VERSION = "v1.5.4"
 $REPO = "MAdityaRao/mar-lang"
 $URL = "https://github.com/$REPO/releases/download/$VERSION/mar-windows-x64.exe"
 $DEST = "$env:ProgramFiles\Mar"

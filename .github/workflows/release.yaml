@@ -16,8 +16,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Create draft release
+      - name: Create draft
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -37,16 +36,13 @@ jobs:
         include:
           - os: ubuntu-latest
             asset_name: mar-linux-x86_64
-
-          - os: macos-latest        # ARM64 (Apple Silicon)
+          - os: macos-latest
             asset_name: mar-macos-arm64
             flags: ""
-
-          - os: macos-latest        # Cross-compile for Intel x86_64
+          - os: macos-latest
             asset_name: mar-macos-x86_64
             flags: "-target x86_64-apple-macos11"
-
-          - os: windows-latest      # Windows x64
+          - os: windows-latest
             asset_name: mar-windows-x64.exe
 
     steps:
@@ -56,49 +52,41 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          # Create directories manually to ensure no permission issues [cite: 3, 4]
           mkdir -p bin build
-          
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            # ZERO-ACTION WINDOWS SETUP:
-            # Manually inject the pre-installed MinGW path into the runner's PATH
+            # Manually inject the pre-installed MinGW path for Windows
             export PATH="/c/msys64/mingw64/bin:/c/msys64/usr/bin:$PATH"
-            [cite_start]make CC=gcc [cite: 1]
+            make CC=gcc
           elif [ "${{ matrix.os }}" = "macos-latest" ]; then
-            [cite_start]make CFLAGS="-Wall -Wextra -std=c11 -Iinclude ${{ matrix.flags }}" [cite: 1]
+            make CFLAGS="-Wall -Wextra -std=c11 -Iinclude ${{ matrix.flags }}"
           else
-            [cite_start]make [cite: 1]
+            make
           fi
 
-      - name: Prepare and Upload Binary
+      - name: Upload Binary
         shell: bash
         env:
+          # This variable allows the 'gh' command to authenticate
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            # Windows 'make' may produce mar or mar.exe; check for both [cite: 1]
-            if [ -f "bin/mar.exe" ]; then
-              mv bin/mar.exe "${{ matrix.asset_name }}"
-            else
-              mv bin/mar "${{ matrix.asset_name }}"
-            fi
+            # Check for the binary with or without .exe
+            [ -f "bin/mar.exe" ] && FILE="bin/mar.exe" || FILE="bin/mar"
+            mv "$FILE" "${{ matrix.asset_name }}"
           else
-            mv bin/mar "${{ matrix.asset_name }}" [cite: 1]
+            mv bin/mar "${{ matrix.asset_name }}"
           fi
-          
-          # Upload directly to the draft release created in Step 1
           gh release upload ${{ github.ref_name }} "${{ matrix.asset_name }}" --clobber
 
   # ── 3. Upload install scripts ────────────────────────────────────────────
   upload_installers:
-    name: Upload Install Scripts
+    name: Upload Scripts
     needs: create_release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Upload scripts
+      - name: Upload
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -113,7 +101,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
