@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-VERSION="v1.5.7"
+VERSION="v1.5.7.1"
 REPO="MAdityaRao/mar-lang"
 BASE="https://github.com/$REPO/releases/download/$VERSION"
 

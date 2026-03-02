@@ -996,8 +996,8 @@ static void emit_stdlib_helpers(FILE *out)
     fprintf(out,
         "/* Mar runtime helpers */\n"
         "#define _mar_print(x) _Generic((x), \\\n"
-        "    int64_t: printf(\"%%ld\", (int64_t)(x)), \\\n"
-        "    double:  printf(\"%%lf\", (double)(x)), \\\n"
+        "    int64_t: printf(\"%%ld\", x), \\\n" 
+        "    double:  printf(\"%%lf\", x), \\\n"
         "    char:    printf(\"%%c\", (char)(x)), \\\n"
         "    char*:   printf(\"%%s\", (char*)(x)), \\\n"
         "    const char*: printf(\"%%s\", (const char*)(x)), \\\n"
@@ -1113,7 +1113,7 @@ bool codegen_c_program(Program *prog, FILE *out, ErrorCtx *ec)
 
     emit_stdlib_helpers(out);
 
-    /* Multi-return structs must precede any function that uses them. */
+    /* 1. Multi-return structs must precede any function prototype that uses them. */
     bool any_tuple = false;
     for (int i = 0; i < prog->func_count; i++) {
         if (prog->funcs[i]->return_type_count > 1) {
@@ -1123,11 +1123,9 @@ bool codegen_c_program(Program *prog, FILE *out, ErrorCtx *ec)
     }
     if (any_tuple) fprintf(out, "\n");
 
-    /* Class structs and method bodies. */
-    for (int i = 0; i < prog->class_count; i++)
-        emit_class(&ctx, prog->classes[i]);
-
-    /* Forward-declare all functions so call order in source doesn't matter. */
+    /* 2. FORWARD-DECLARE all functions FIRST so class methods can see them.
+       This prevents 'implicit function declaration' errors in C. */
+    fprintf(out, "/* Function prototypes */\n");
     for (int i = 0; i < prog->func_count; i++) {
         FuncDecl *f = prog->funcs[i];
         emit_return_type(&ctx, f, out);
@@ -1147,7 +1145,12 @@ bool codegen_c_program(Program *prog, FILE *out, ErrorCtx *ec)
     }
     fprintf(out, "\n");
 
-    /* Function bodies. */
+    /* 3. Emit Class structs and method bodies. 
+       These can now safely call the functions prototyped above. */
+    for (int i = 0; i < prog->class_count; i++)
+        emit_class(&ctx, prog->classes[i]);
+
+    /* 4. Emit actual Function bodies. */
     for (int i = 0; i < prog->func_count; i++) {
         FuncDecl *f = prog->funcs[i];
         scope_clear();
