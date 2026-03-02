@@ -3,18 +3,23 @@
 
 #include <stdio.h>
 #include <stdbool.h>
-#include "mar/ast.h"    /* Program, FuncDecl, ClassDecl, Stmt, Expr, MarType */
-#include "mar/error.h"  /* ErrorCtx */
+#include "mar/ast.h"
+#include "mar/error.h"
 
-/* Code generation context */
 typedef struct {
-    FILE     *out;
-    ErrorCtx *errors;
-    int       indent;
-    int       tmp_counter;
+    FILE        *out;
+    ErrorCtx    *errors;
+    int          indent;
+    int          tmp_counter;
+    const char  *current_func_name; /* used by STMT_MULTI_RETURN to name the struct */
+    /* multi-return struct registry (for deduplication) */
+    char       **tuple_types;
+    int          tuple_count;
+    int          tuple_cap;
+    /* full program reference (for class lookup / inheritance) */
+    Program     *prog;
 } CGenCtx;
 
-/* Public API — implemented in codegen_c.c */
 bool codegen_c_program(Program *prog, FILE *out, ErrorCtx *ec);
 
-#endif /* MAR_CODEGEN_C_H */
+#endif

@@ -9,9 +9,14 @@ typedef struct {
     Token    *tokens;
     int       pos;
     ErrorCtx *errors;
+    /* for import resolution */
+    const char *source_dir;
 } Parser;
 
 Parser  *parser_create(Token *tokens, ErrorCtx *ec);
 Program *parser_parse(Parser *p);
+
+/* Merge src's functions and classes into dst (used by import) */
+void program_merge(Program *dst, Program *src);
 
 #endif

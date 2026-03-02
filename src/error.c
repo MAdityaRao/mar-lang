@@ -16,17 +16,24 @@ ErrorCtx *error_ctx_create(const char *filename) {
 }
 
 void error_ctx_load_source(ErrorCtx *ec, const char *src) {
-    char *copy = strdup(src);
     int lines = 1;
-    for (char *p = copy; *p; p++)
+    for (const char *p = src; *p; p++)
         if (*p == '\n') lines++;
-    ec->source_lines = calloc(lines, sizeof(char*));
+    ec->source_lines = calloc(lines + 1, sizeof(char*));
     ec->line_count   = lines;
+
+    const char *start = src;
     int i = 0;
-    char *line = strtok(copy, "\n");
-    while (line) {
-        ec->source_lines[i++] = strdup(line);
-        line = strtok(NULL, "\n");
+    for (const char *p = src; ; p++) {
+        if (*p == '\n' || *p == '\0') {
+            size_t len = (size_t)(p - start);
+            ec->source_lines[i] = malloc(len + 1);
+            memcpy(ec->source_lines[i], start, len);
+            ec->source_lines[i][len] = '\0';
+            i++;
+            start = p + 1;
+            if (*p == '\0') break;
+        }
     }
 }
 
