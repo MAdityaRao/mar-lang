@@ -19,7 +19,10 @@ SRCS = src/arena.c \
 OBJS = $(SRCS:src/%.c=build/%.o)
 BIN  = bin/mar
 
-.PHONY: all release debug clean test examples help
+PREFIX  = /usr/local
+BINDIR  = $(PREFIX)/bin
+
+.PHONY: all release debug clean install uninstall test examples help
 
 all: $(BIN)
 
@@ -42,6 +45,18 @@ debug:
 	mkdir -p bin build
 	$(CC) $(CFLAGS_DBG) -o $(BIN) $(SRCS) -lm
 	@echo "✓ Debug build: $(BIN)"
+
+install: release
+	@echo "Installing mar to $(BINDIR)..."
+	@mkdir -p $(BINDIR)
+	@cp $(BIN) $(BINDIR)/mar
+	@chmod +x $(BINDIR)/mar
+	@echo "✓ Installed: $(BINDIR)/mar"
+	@echo "  Run: mar --help"
+
+uninstall:
+	@rm -f $(BINDIR)/mar
+	@echo "✓ Uninstalled mar"
 
 clean:
 	rm -rf build bin
@@ -74,6 +89,8 @@ test: $(BIN)
 
 help:
 	@echo ""
+	@echo "  make install  — install mar to $(BINDIR)"
+	@echo "  make uninstall— remove mar from $(BINDIR)"
 	@echo "  make         — build the compiler (debug mode)"
 	@echo "  make release — build optimized"
 	@echo "  make debug   — build with sanitizers"

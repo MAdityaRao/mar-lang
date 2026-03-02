@@ -1,4 +1,53 @@
-build
-bin
-.vscode
+# ── Build output ──────────────────────────────────────────────────────────────
+bin/
+build/
+# ── Generated C output (from mar codegen) ────────────────────────────────────
+*.c.out
+output.c
+
+# ── Compiled .mar programs (test/example artifacts) ──────────────────────────
+examples/*.out
+tests/**/*.out
+
+# ── Sanitizer / debug artifacts ───────────────────────────────────────────────
+*.dSYM/
+*.asan
+*.log
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
 .DS_Store
+.AppleDouble
+.LSOverride
+
+# ── Linux ─────────────────────────────────────────────────────────────────────
+*~
+.fuse_hidden*
+
+# ── Windows ───────────────────────────────────────────────────────────────────
+Thumbs.db
+Desktop.ini
+
+# ── Editor — VS Code ──────────────────────────────────────────────────────────
+.vscode/
+*.code-workspace
+
+# ── Editor — CLion / JetBrains ────────────────────────────────────────────────
+.idea/
+cmake-build-*/
+
+# ── Editor — Vim / Neovim ─────────────────────────────────────────────────────
+*.swp
+*.swo
+Session.vim
+
+# ── Editor — Emacs ────────────────────────────────────────────────────────────
+\#*\#
+.\#*
+
+# ── Core dumps ────────────────────────────────────────────────────────────────
+core
+core.*
+vgcore.*
+
+# ── Valgrind ──────────────────────────────────────────────────────────────────
+valgrind-out.txt

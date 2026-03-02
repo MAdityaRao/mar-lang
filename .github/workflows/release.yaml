@@ -9,8 +9,7 @@ permissions:
   contents: write
 
 jobs:
-
-  # ── 1. Create a draft release first ────────────────────────────────────────
+  # ── 1. Create draft release ──────────────────────────────────────────────
   create_release:
     name: Create Draft Release
     runs-on: ubuntu-latest
@@ -18,28 +17,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create draft
+      - name: Create draft release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create ${{ github.ref_name }} \
             --draft \
-            --title "Release ${{ github.ref_name }}" \
-            --notes "Automated build." \
+            --title "Mar ${{ github.ref_name }}" \
+            --notes "See [install instructions](https://github.com/${{ github.repository }}#installation)." \
           || echo "Release already exists, continuing."
 
-  # ── 2. Build each platform and upload to the draft ─────────────────────────
+  # ── 2. Build all platforms ───────────────────────────────────────────────
   build:
-    name: Build on ${{ matrix.os }}
+    name: Build — ${{ matrix.asset_name }}
     needs: create_release
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             asset_name: mar-linux-x86_64
-          - os: macos-latest
+
+          - os: macos-latest        # arm64 (M1–M5)
             asset_name: mar-macos-arm64
+
+          - os: macos-13            # x86_64 (Intel)
+            asset_name: mar-macos-x86_64
+
           - os: windows-latest
             asset_name: mar-windows-x64.exe
 
@@ -62,29 +67,45 @@ jobs:
             make
           fi
 
+      - name: Rename binary
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            if   [ -f "bin/mar.exe" ]; then mv bin/mar.exe "${{ matrix.asset_name }}"
+            elif [ -f "bin/mar"     ]; then mv bin/mar     "${{ matrix.asset_name }}"
+            else echo "Binary not found in bin/" && exit 1
+            fi
+          else
+            mv bin/mar "${{ matrix.asset_name }}"
+          fi
+
       - name: Upload binary
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            if [ -f "bin/mar.exe" ]; then
-              mv bin/mar.exe ${{ matrix.asset_name }}
-            elif [ -f "bin/mar" ]; then
-              mv bin/mar ${{ matrix.asset_name }}
-            else
-              echo "Error: binary not found in bin/" && exit 1
-            fi
-          else
-            mv bin/mar ${{ matrix.asset_name }}
-          fi
+          gh release upload ${{ github.ref_name }} "${{ matrix.asset_name }}" --clobber
 
-          gh release upload ${{ github.ref_name }} ${{ matrix.asset_name }} --clobber
+  # ── 3. Upload install scripts ────────────────────────────────────────────
+  upload_installers:
+    name: Upload Install Scripts
+    needs: create_release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  # ── 3. Publish only after all uploads succeed ───────────────────────────────
+      - name: Upload scripts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ github.ref_name }} install.sh --clobber
+          gh release upload ${{ github.ref_name }} install.ps1 --clobber
+
+  # ── 4. Publish after everything succeeds ────────────────────────────────
   publish_release:
     name: Publish Release
-    needs: build
+    needs: [build, upload_installers]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
