@@ -389,12 +389,26 @@ static void emit_expr(CGenCtx *c, Expr *e)
             break;
 
         case EXPR_CALL:
-            fprintf(c->out, "%s(", e->call.callee);
-            for (int i = 0; i < e->call.argc; i++) {
-                if (i) fprintf(c->out, ", ");
-                emit_expr(c, e->call.args[i]);
+            if (strcmp(e->call.callee, "char") == 0) {
+                fprintf(c->out, "((char)(");
+                emit_expr(c, e->call.args[0]);
+                fprintf(c->out, "))");
+            } else if (strcmp(e->call.callee, "int") == 0) {
+                fprintf(c->out, "((int64_t)(");
+                emit_expr(c, e->call.args[0]);
+                fprintf(c->out, "))");
+            } else if (strcmp(e->call.callee, "float") == 0) {
+                fprintf(c->out, "((double)(");
+                emit_expr(c, e->call.args[0]);
+                fprintf(c->out, "))");
+            } else {
+                fprintf(c->out, "%s(", e->call.callee);
+                for (int i = 0; i < e->call.argc; i++) {
+                    if (i) fprintf(c->out, ", ");
+                    emit_expr(c, e->call.args[i]);
+                }
+                fputc(')', c->out);
             }
-            fputc(')', c->out);
             break;
 
         case EXPR_MEMBER_ACCESS:
@@ -705,14 +719,18 @@ static void emit_stmt(CGenCtx *c, Stmt *s)
 
         case STMT_PRINT: {
             ind(c);
-            fprintf(c->out, "printf(\"");
-            emit_str_escaped(c, s->print.fmt);
-            fputc('"', c->out);
             for (int i = 0; i < s->print.argc; i++) {
-                fprintf(c->out, ", ");
+                fprintf(c->out, "_mar_print(");
                 emit_expr(c, s->print.args[i]);
+                fprintf(c->out, ");\n");
+                
+                if (i < s->print.argc - 1) {
+                    ind(c);
+                    fprintf(c->out, "printf(\" \");\n");
+                }
             }
-            fprintf(c->out, ");\n");
+            ind(c);
+            fprintf(c->out, "printf(\"\\n\");\n");
             break;
         }
 
@@ -974,6 +992,14 @@ static void emit_stdlib_helpers(FILE *out)
 {
     fprintf(out,
         "/* Mar runtime helpers */\n"
+        "#define _mar_print(x) _Generic((x), \\\n"
+        "    int64_t: printf(\"%%ld\", (int64_t)(x)), \\\n"
+        "    double:  printf(\"%%lf\", (double)(x)), \\\n"
+        "    char:    printf(\"%%c\", (char)(x)), \\\n"
+        "    char*:   printf(\"%%s\", (char*)(x)), \\\n"
+        "    const char*: printf(\"%%s\", (const char*)(x)), \\\n"
+        "    default: printf(\"%%p\", (void*)(x)) \\\n"
+        ")\n"
         "static char   _mar_heap[8 * 1024 * 1024];\n"
         "static size_t _mar_heap_used = 0;\n"
         "\n"

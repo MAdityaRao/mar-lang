@@ -166,7 +166,18 @@ static Expr *finish_call(Parser *p, Expr *callee_expr, SrcLoc loc) {
 static Expr *parse_primary(Parser *p) {
     Token *t   = peek(p);
     SrcLoc loc = loc_of(t);
-
+    /* FEATURE: Type casts disguised as function calls (e.g., char(a)) */
+    if (t->kind == TOK_INT || t->kind == TOK_FLOAT || t->kind == TOK_CHAR) {
+        Token *type_tok = advance(p);
+        Expr *e = expr_new(EXPR_CALL, loc);
+        e->call.callee = MAR_STRDUP(type_tok->value); /* e.g., "char" */
+        expect(p, TOK_LPAREN);
+        e->call.args = MAR_ALLOC_N(Expr*, 1);
+        e->call.args[0] = parse_expr(p);
+        e->call.argc = 1;
+        expect(p, TOK_RPAREN);
+        return e;
+    }
     /* null literal — FEATURE 5 */
     if (t->kind == TOK_NULL) {
         advance(p);
@@ -489,10 +500,19 @@ static Stmt *parse_var_decl(Parser *p) {
         /* backtrack the comma */
         p->pos = save;
     }
+    char name_buf[512];
+    snprintf(name_buf, sizeof(name_buf), "%s", name_tok->value);
+
+    while (check(p, TOK_COMMA)) {
+        advance(p); 
+        Token *next_var = expect(p, TOK_IDENT);
+        strncat(name_buf, ", ", sizeof(name_buf) - strlen(name_buf) - 1);
+        strncat(name_buf, next_var->value, sizeof(name_buf) - strlen(name_buf) - 1);
+    }
 
     Stmt *s        = stmt_new(STMT_VAR_DECL, loc);
     s->var_decl.type = type;
-    s->var_decl.name = MAR_STRDUP(name_tok->value);
+    s->var_decl.name = MAR_STRDUP(name_buf);
     s->var_decl.init = NULL;
     s->var_decl.array_init       = NULL;
     s->var_decl.array_init_count = 0;
@@ -839,18 +859,26 @@ static Stmt *parse_stmt(Parser *p) {
         return stmt_new(STMT_BREAK, loc);
     }
 
-    /* print */
+   /* print */
     if (t->kind == TOK_PRINT) {
         advance(p);
         expect(p, TOK_LPAREN);
-        Token *fmt = expect(p, TOK_STRING_LIT);
-        Stmt *s    = stmt_new(STMT_PRINT, loc);
-        s->print.fmt = MAR_STRDUP(fmt->value);
+        Stmt *s = stmt_new(STMT_PRINT, loc);
+        s->print.fmt = NULL; /* We no longer require a format string! */
+        
         Expr **args  = malloc(sizeof(Expr*) * 32);
         int ac = 0;
-        while (match(p, TOK_COMMA)) args[ac++] = parse_expr(p);
+        
+        /* Parse any number of arguments separated by commas */
+        if (!check(p, TOK_RPAREN) && !check(p, TOK_EOF)) {
+            do {
+                args[ac++] = parse_expr(p);
+            } while (match(p, TOK_COMMA));
+        }
+        
         expect(p, TOK_RPAREN);
         match(p, TOK_SEMICOLON);
+        
         s->print.args = MAR_ALLOC_N(Expr*, ac);
         memcpy(s->print.args, args, sizeof(Expr*) * ac);
         s->print.argc = ac;
@@ -858,18 +886,26 @@ static Stmt *parse_stmt(Parser *p) {
         return s;
     }
 
-    /* take */
-    if (t->kind == TOK_TAKE) {
+  if (t->kind == TOK_TAKE) {
         advance(p);
         expect(p, TOK_LPAREN);
-        Token *fmt = expect(p, TOK_STRING_LIT);
-        Stmt *s    = stmt_new(STMT_TAKE, loc);
-        s->print.fmt = MAR_STRDUP(fmt->value);
+        
+        Stmt *s = stmt_new(STMT_TAKE, loc);
+        s->print.fmt = NULL; /* We no longer require a format string! */
+        
         Expr **args  = malloc(sizeof(Expr*) * 32);
         int ac = 0;
-        while (match(p, TOK_COMMA)) args[ac++] = parse_expr(p);
+        
+        /* Parse any number of arguments separated by commas */
+        if (!check(p, TOK_RPAREN)) {
+            do {
+                args[ac++] = parse_expr(p);
+            } while (match(p, TOK_COMMA));
+        }
+        
         expect(p, TOK_RPAREN);
         match(p, TOK_SEMICOLON);
+        
         s->print.args = MAR_ALLOC_N(Expr*, ac);
         memcpy(s->print.args, args, sizeof(Expr*) * ac);
         s->print.argc = ac;
