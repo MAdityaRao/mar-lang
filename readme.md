@@ -1,712 +1,709 @@
+
+```markdown
 # Mar Language
 
-> A compiled, statically-typed language with C-level performance and a clean, minimal syntax.  
-> Compiles to native binaries via C. No semicolons. No header files. No friction.
+> A compiled, statically-typed language with C-level performance and a clean, minimal-friction syntax.  
+> Compiles to native binaries via C. No semicolons. No header files. No format strings. No memory leaks.
 
 ---
 
-## What is Mar?
+## Table of Contents
 
-Mar is a compiled language written in C. You write `.mar` source files, and one command compiles and runs your program. Behind the scenes Mar translates your code to C and invokes `gcc` or `clang` automatically.
+1. [Introduction](#1-introduction)
+2. [Philosophy & Design](#2-philosophy--design)
+3. [Installation Guide](#3-installation-guide)
+    - [macOS (Apple Silicon & Intel)](#macos-apple-silicon--intel)
+    - [Linux (Ubuntu / Debian)](#linux-ubuntu--debian)
+    - [Windows (WSL)](#windows-wsl)
+4. [Compiler CLI Usage](#4-compiler-cli-usage)
+    - [Run Mode (Scripting)](#run-mode-scripting)
+    - [Build Mode (Native Binaries)](#build-mode-native-binaries)
+    - [Tooling & LSP](#tooling--lsp)
+5. [Language Reference](#5-language-reference)
+    - [Primitive Types](#primitive-types)
+    - [Variables & Declarations](#variables--declarations)
+    - [Type Casting](#type-casting)
+    - [Operators & Expressions](#operators--expressions)
+    - [Control Flow](#control-flow)
+    - [Functions & Multi-Return](#functions--multi-return)
+    - [Arrays & Iteration](#arrays--iteration)
+    - [Strings](#strings)
+    - [Frictionless I/O](#frictionless-io)
+    - [Object-Oriented Programming](#object-oriented-programming)
+    - [Null Handling](#null-handling)
+6. [Standard Library (Stdlib)](#6-standard-library-stdlib)
+    - [mar/math](#marmath)
+    - [mar/str](#marstr)
+    - [mar/io](#mario)
+7. [Compiler Architecture (Under the Hood)](#7-compiler-architecture-under-the-hood)
+    - [The Pipeline](#the-pipeline)
+    - [The Arena Allocator](#the-arena-allocator)
+    - [C11 _Generic & Type Inference](#c11-_generic--type-inference)
+8. [Example Programs](#8-example-programs)
+9. [Error Handling & Diagnostics](#9-error-handling--diagnostics)
+10. [Contributing Guide](#10-contributing-guide)
+11. [Roadmap](#11-roadmap)
+12. [License & Author](#12-license--author)
+
+---
+
+## 1. Introduction
+
+Mar is a modern programming language designed for developers who want the raw speed and zero-dependency deployment of C, without enduring C's archaic syntax, unsafe memory pitfalls, and tedious boilerplate.
+
+Mar is technically a **compiler frontend**. You write `.mar` source files, and the Mar compiler parses them, constructs a strict Abstract Syntax Tree (AST), and lowers that AST into highly optimized, safe, standard C code. It then automatically orchestrates your system's native C compiler (`gcc` or `clang`) to produce a final, standalone native executable.
+
+```text
+source.mar  →  Mar compiler  →  Safe C11 Code  →  GCC/Clang  →  Native Binary
 
 ```
-source.mar  →  Mar compiler  →  output.c  →  gcc/clang  →  native binary
-```
-
-The generated C is readable, portable, and benefits from the full GCC/Clang optimization pipeline.
 
 ---
 
-## Why Mar?
+## 2. Philosophy & Design
 
-| Pain point in C | How Mar addresses it |
-|---|---|
-| Semicolons on every line | No semicolons |
-| Verbose `for` loops | `for i in range(0, 10)` |
-| `printf` / `scanf` boilerplate | `print()` and `take()` |
-| Switch fallthrough bugs | `break` auto-inserted per case |
-| Struct + manual init boilerplate | `class` with `init()` and `new` |
-| Manual heap management | Arena-allocated objects, zero leaks |
-| `->` vs `.` confusion | Always dot syntax — compiler handles the rest |
-| Compile, link, run as three steps | `mar run program.mar` does everything |
+Mar eliminates the friction of systems programming. We addressed the most painful aspects of C/C++ and replaced them with modern, ergonomic solutions.
+
+| Pain point in C / C++ | The Mar Solution |
+| --- | --- |
+| **Semicolons on every line** | **Zero semicolons.** The parser dynamically infers statement boundaries. |
+| **`printf` / `scanf` formatting** | **Format-free I/O.** `print(a)` and `take(a)` use C11 generic macros to auto-infer types. |
+| **Verbose `for` loops** | **Pythonic iteration.** `for i in range(0, 10)` and `for item in arr`. |
+| **Switch fallthrough bugs** | **Safe Switches.** `break` is auto-inserted per case. Fallthrough is impossible. |
+| **Manual memory management** | **Arena-allocated objects.** Zero `malloc`/`free` calls. Zero memory leaks by design. |
+| **`->` vs `.` pointer confusion** | **Unified access.** Always use dot syntax (`obj.field`). The compiler translates pointers. |
+| **Struct + manual init** | **Native OOP.** `class` definitions with mandatory `init()` methods and `new` instantiation. |
+| **Cluttered workspaces** | **Auto-cleanup.** Mar instantly cleans up intermediate `.c` files and binaries. |
 
 ---
 
-## Quick Start
+## 3. Installation Guide
+
+Mar requires a working C compiler (`gcc` or `clang`) and `make` to build the compiler from source.
+
+### macOS (Apple Silicon & Intel)
+
+macOS ships with Clang via the Xcode Command Line Tools.
 
 ```bash
-git clone https://github.com/adityarao/mar-lang.git
-cd mar-lang
-make
-./bin/mar run examples/primes.mar
-```
-
----
-
-## Installation
-
-### Requirements
-
-| Tool | Purpose |
-|---|---|
-| `gcc` or `clang` | Compiles the generated C output |
-| `make` | Builds the Mar compiler itself |
-| `git` | Clones this repository |
-
-### macOS (M1 / Intel)
-
-```bash
-# Install Xcode command line tools (includes clang and make)
+# 1. Install Xcode command line tools
 xcode-select --install
 
-# Install Homebrew
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# M1 only — add Homebrew to PATH
-echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
-eval "$(/opt/homebrew/bin/brew shellenv)"
-
-# Clone and build
-git clone https://github.com/adityarao/mar-lang.git
+# 2. Clone the repository
+git clone [https://github.com/adityarao/mar-lang.git](https://github.com/adityarao/mar-lang.git)
 cd mar-lang
+
+# 3. Build the Mar compiler
 make
 
-./bin/mar --help
+# 4. Install system-wide (allows running 'mar' from anywhere)
+sudo cp bin/mar /usr/local/bin/mar
+
 ```
 
 ### Linux (Ubuntu / Debian)
 
 ```bash
+# 1. Install prerequisites
 sudo apt update
 sudo apt install gcc make git
 
-git clone https://github.com/adityarao/mar-lang.git
+# 2. Clone the repository
+git clone [https://github.com/adityarao/mar-lang.git](https://github.com/adityarao/mar-lang.git)
 cd mar-lang
+
+# 3. Build the compiler
 make
 
-./bin/mar --help
-```
-
-### Install system-wide (optional)
-
-```bash
+# 4. Install system-wide
 sudo cp bin/mar /usr/local/bin/mar
+
 ```
 
-After this, `mar` works from any directory.
+### Windows (WSL)
+
+Mar is built for POSIX-compliant systems. Windows users should use the Windows Subsystem for Linux (WSL).
+
+```bash
+# Inside your WSL Ubuntu terminal:
+sudo apt update && sudo apt install build-essential git
+git clone [https://github.com/adityarao/mar-lang.git](https://github.com/adityarao/mar-lang.git)
+cd mar-lang
+make
+sudo cp bin/mar /usr/local/bin/mar
+
+```
 
 ---
 
-## Usage
+## 4. Compiler CLI Usage
 
-### Compile and run
+Mar features a dual-mode build system that keeps your project directories clean.
+
+### Run Mode (Scripting)
+
+This mode acts exactly like running a Python or Node.js script. Mar compiles your code to a hidden temporary location, executes the binary, and instantly deletes it. Your folder remains 100% clean.
 
 ```bash
-mar run yourprogram.mar
+mar run app.mar
+
 ```
 
-### Compile to C only (for inspection)
+### Build Mode (Native Binaries)
+
+When you are ready to distribute your software, use Build Mode. This creates a lightning-fast native binary executable in your current directory, while silently deleting the intermediate C files.
 
 ```bash
-./bin/mar yourprogram.mar -o yourprogram.c
+mar app.mar
+./app          # Execute your native binary!
+
 ```
 
-### Debug flags
+### Tooling & LSP
+
+Mar includes deep inspection tools and a built-in Language Server for IDE integration.
 
 ```bash
-./bin/mar yourprogram.mar --dump-tokens   # print every lexer token
-./bin/mar yourprogram.mar --dump-ast      # print the parsed AST summary
-```
+# Print the generated C code instead of deleting it (useful for debugging)
+mar app.mar -o debug_output.c
 
-### Start the language server
+# Print every token generated by the Lexer
+mar app.mar --dump-tokens
 
-```bash
+# Print the parsed Abstract Syntax Tree (AST) structure
+mar app.mar --dump-ast
+
+# Start the JSON-RPC Language Server (used by VS Code / Neovim extensions)
 mar lsp
-```
 
-Connects over stdin/stdout using the LSP JSON-RPC protocol. Supports hover documentation, diagnostics on save, and keyword completion.
+```
 
 ---
 
-## Language Reference
+## 5. Language Reference
 
-### Types
+### Primitive Types
 
-| Mar type | C equivalent | Notes |
-|---|---|---|
-| `int` | `int64_t` | 64-bit signed integer |
-| `float` | `double` | 64-bit IEEE 754 |
-| `char` | `char` | Single byte |
-| `bool` | `bool` | `true` or `false` |
-| `string` | `const char*` | Immutable UTF-8 string |
-| `int[N]` | `int64_t arr[N]` | Fixed-size array |
-| `ClassName` | `ClassName*` | Class instance (heap pointer) |
+Mar is strictly statically typed.
 
-### Variables
+| Mar type | C equivalent | Description |
+| --- | --- | --- |
+| `int` | `int64_t` | 64-bit signed integer. |
+| `float` | `double` | 64-bit IEEE 754 floating-point number. |
+| `char` | `char` | Single 8-bit character. |
+| `bool` | `bool` | Boolean (`true` or `false`). |
+| `string` | `const char*` | Immutable UTF-8 string pointer. |
+| `int[N]` | `int64_t arr[N]` | Fixed-size array allocated on the stack. |
+| `ClassName` | `ClassName*` | Heap-allocated class instance (pointer). |
+
+### Variables & Declarations
+
+Variables must be declared with their type.
 
 ```mar
-int x               // zero-initialised
-int x = 10          // declare and assign
-int arr[3] = {1, 2, 3}
+// Single declarations
+int x
+int y = 10
 string name = "Mar"
+bool is_active = true
+
+// Arrays
+int arr[3] = {1, 2, 3}
+
+// Objects
 Player p = new Player(100)
+
 ```
 
-### Operators
+**Multi-Variable Declarations**
+Mar features a robust AST that allows safely declaring and initializing multiple variables of the same type on a single line.
 
 ```mar
-+   -   *   /   %         // arithmetic
-==  !=  <   >   <=  >=    // comparison
-&&  ||  !                 // logical
-=   +=  -=  *=  /=  %=    // assignment
-.                         // member access
-&                         // address-of (for take())
+int a, b = 5, c
+float width = 10.5, height = 20.0, depth
+char first = 'A', second = 'B'
+
 ```
 
-### If / Else
+### Type Casting
+
+Mar prohibits implicit type coercion to prevent silent truncation bugs. Casting is accomplished using a clean, functional syntax.
 
 ```mar
-if(x > 0)
-{
-    print("positive\n")
-}
-else
-{
-    print("not positive\n")
-}
+int val = 65
 
-// Single-line form (braces optional)
-if(x > 0)
-    print("positive\n")
+// Int to Char
+char c = char(val)    // 'A'
+
+// Char to Int
+int ascii = int(c)    // 65
+
+// Int to Float
+float f = float(val)  // 65.000000
+
 ```
 
-### While
+### Operators & Expressions
+
+```mar
+// Arithmetic
++   -   * /   %
+
+// Comparison
+==  !=  <   >   <=  >=
+
+// Logical
+&&  ||  !
+
+// Compound Assignment
+=   +=  -=  *=  /=  %=
+
+// Advanced
+.   // Member access (obj.field)
+&   // Address-of (only required for specific C-interop or raw take() calls)
+
+```
+
+### Control Flow
+
+#### If / Else
+
+Braces are required for multi-line blocks, but can be omitted for single-line statements.
+
+```mar
+if (score > 100) {
+    print("High score!")
+} else if (score == 100) {
+    print("Exactly 100!")
+} else {
+    print("Keep trying.")
+}
+
+// Single-line
+if (game_over) print("Game Over")
+
+```
+
+#### While Loop
+
+Standard pre-condition loops.
 
 ```mar
 int i = 0
-while(i < 10)
-{
-    print("%d\n", i)
-    i = i + 1
+while (i < 10) {
+    print(i)
+    i += 1
 }
+
 ```
 
-### For range
+#### For Range
+
+Python-style range iteration. The `start` bound is inclusive, and the `end` bound is exclusive.
 
 ```mar
-for i in range(0, 5)
-{
-    print("%d\n", i)
+// Prints 0 through 4
+for i in range(0, 5) {
+    print(i)
 }
+
 ```
 
-Start is inclusive, end is exclusive. Equivalent to `for (int i = 0; i < 5; i++)` in C.
+#### Safe Switch
 
-### For array iteration
-
-```mar
-int scores[3] = {10, 20, 30}
-for s in scores
-{
-    print("%d\n", s)
-}
-```
-
-### Switch
+Colons are omitted. The compiler automatically injects `break` statements at the end of every case block to eliminate fallthrough bugs.
 
 ```mar
-switch(n)
-{
+switch(n) {
     case 1
-        print("one\n")
-        break
+        print("one")
     case 2
-        print("two\n")
-        break
+        print("two")
     default
-        print("other\n")
+        print("other")
 }
+
 ```
 
-No colons after `case` or `default`. If you omit `break`, the compiler inserts one automatically.
+### Functions & Multi-Return
 
-### Functions
+Functions can be called before they are defined (no forward declarations needed).
 
 ```mar
-int add(int a, int b)
-{
+int add(int a, int b) {
     return a + b
 }
 
-int main()
-{
-    int result = add(3, 4)
-    print("Result: %d\n", result)
-    return 0
-}
 ```
 
-Functions can be called before they are defined — no forward declarations needed.
-
-### Multiple return values
+**Multiple Return Values** Mar supports returning multiple values via automatic tuple-struct lowering.
 
 ```mar
-int, int swap(int a, int b)
-{
+int, int swap(int a, int b) {
     return b, a
 }
 
-int main()
-{
-    int x, int y = swap(1, 2)
-    print("%d %d\n", x, y)
+int main() {
+    int x, int y = swap(10, 20)
+    print(x, y)  // Outputs: 20 10
     return 0
 }
+
+```
+
+### Arrays & Iteration
+
+Arrays are fixed-size stack allocations. The compiler automatically tracks array lengths using companion variables, allowing for completely safe iteration.
+
+```mar
+int scores[5] = {10, 20, 30, 40, 50}
+
+// Query length
+int count = len(scores)
+
+// Array traversal: The type of 's' is automatically inferred as 'int'
+for s in scores {
+    print(s)
+}
+
 ```
 
 ### Strings
 
+Strings are immutable `const char*` arrays. String concatenation dynamically allocates memory from the Mar Runtime Arena, ensuring memory safety.
+
 ```mar
 string greeting = "Hello"
 string name = "World"
-string message = greeting + ", " + name + "!\n"
+
+// Arena-allocated concatenation
+string message = greeting + ", " + name + "!"
 print(message)
 
-int n = len(greeting)    // 5
+// Query length
+int n = len(greeting)  // 5
+
 ```
 
-String concatenation via `+` allocates from the runtime arena.
+### Frictionless I/O
 
-### Arrays
+Mar completely eliminates `printf` and `scanf` format string boilerplate. The `print()` and `take()` functions utilize C11 `_Generic` macros to auto-infer types.
 
 ```mar
-int arr[5] = {10, 20, 30, 40, 50}
-arr[0] = 99
-print("%d\n", arr[2])         // 30
-print("len = %d\n", len(arr)) // 5
+int age
+float height
+char initial
+
+// Take multiple inputs without formatting or ampersands!
+take(age, height, initial)
+
+// Print automatically spaces arguments and appends a newline!
+print("User info:", age, height, initial)
+
 ```
 
-### Print and take
+### Object-Oriented Programming
+
+Mar supports classes and inheritance with strictly safe memory semantics.
+
+* All objects are allocated on the Arena via `new`.
+* All objects are pointers (pass-by-reference).
+* The `init()` method is mandatory and called automatically by `new`.
+* Fields are accessed using dot syntax (`obj.field`).
 
 ```mar
-print("x = %d\n", x)
-print("name = %s\n", name)
-
-int n
-take("%d", &n)
-
-int a, b
-take("%d %d", &a, &b)
-```
-
-`print` wraps `printf`. `take` wraps `scanf`. Same format specifiers apply.
-
-### Classes
-
-```mar
-class Player
-{
+class Player {
     int health
     int score
 
-    void init(int h)
-    {
+    void init(int h) {
         health = h
         score = 0
     }
 
-    void damage(int amount)
-    {
-        health = health - amount
-    }
-
-    int is_alive()
-    {
-        if(health > 0)
-            return 1
-        return 0
+    void damage(int amount) {
+        health -= amount
     }
 }
 
-int main()
-{
+int main() {
     Player p = new Player(100)
     p.damage(20)
-    print("HP: %d alive: %d\n", p.health, p.is_alive())
+    print("Health:", p.health)
     return 0
 }
+
 ```
 
-- `new ClassName(args)` allocates from the arena and calls `init(args)`.
-- Methods reference fields directly — no `this->` syntax needed.
-- Instances are always pointers. `p.health` compiles to `p->health` in C.
-- Always define an `init` method; `new` always calls it.
+#### Inheritance
 
-### Inheritance
+Classes can inherit fields and methods using `extends`.
 
 ```mar
-class Animal
-{
+class Animal {
     string name
-
     void init(string n) { name = n }
-    void speak() { print("...\n") }
+    void speak() { print("...") }
 }
 
-class Dog extends Animal
-{
-    void speak() { print("%s says woof\n", name) }
+class Dog extends Animal {
+    // Override parent method
+    void speak() { print(name, "says woof!") }
 }
 
-int main()
-{
-    Dog d = new Dog("Rex")
-    d.speak()
-    return 0
-}
 ```
 
-Child classes inherit all parent fields. Methods can be overridden. Non-overridden parent methods are forwarded automatically.
+### Null Handling
 
-### Null
+Mar provides a native `null` literal for safe pointer comparisons.
 
 ```mar
 Player p = null
-
-if(p == null)
-    print("no player\n")
-```
-
-### Import
-
-```mar
-import "utils.mar"       // user file, resolved relative to current directory
-
-import "mar/math"        // standard: sqrt, pow, floor, ceil, min, max, abs
-import "mar/str"         // standard: mar_str_len, mar_str_cmp, mar_str_to_int, mar_int_to_str
-import "mar/io"          // standard: mar_file_read, mar_file_write
-```
-
----
-
-## How the Compiler Works
-
-```
-source.mar
-    │
-    ▼
-┌──────────┐
-│  Lexer   │  src/lexer.c
-│          │  Converts source text to a flat token array.
-│          │  "int x = 5" → [INT] [IDENT:x] [ASSIGN] [INT_LIT:5]
-└────┬─────┘
-     │ Token[]
-     ▼
-┌──────────┐
-│  Parser  │  src/parser.c
-│          │  Recursive descent. Builds an AST from the token stream.
-│          │  Handles operator precedence, class declarations, imports.
-└────┬─────┘
-     │ Program*
-     ▼
-┌──────────┐
-│ Codegen  │  src/codegen_c.c
-│          │  Walks the AST and writes C source.
-│          │  for-range  → while loop
-│          │  class      → typedef struct + prefixed functions
-│          │  new Foo()  → arena_alloc + Foo_init()
-│          │  p.field    → p->field
-│          │  print()    → printf()
-└────┬─────┘
-     │ output.c
-     ▼
-gcc / clang
-     │
-     ▼
-native binary
-```
-
-**Cross-cutting components:**
-
-- `arena.c` — All compiler memory lives in a single region. One call frees everything at exit. Mar program objects created with `new` are also arena-allocated at runtime.
-- `error.c` — Errors from any stage are collected and reported together with the source line and a `^` caret pointing to the exact column.
-- `lsp.c` — JSON-RPC language server (hover, diagnostics, completion) served over stdin/stdout.
-
----
-
-## Project Structure
-
-```
-mar-lang/
-├── src/
-│   ├── main.c          entry point, argument parsing, pipeline orchestration
-│   ├── arena.c         region allocator
-│   ├── error.c         error collection and formatted output
-│   ├── ast.c           AST node constructors and debug printer
-│   ├── lexer.c         tokeniser
-│   ├── parser.c        recursive descent parser
-│   ├── codegen_c.c     C code generator
-│   └── lsp.c           LSP language server
-├── include/mar/
-│   ├── arena.h
-│   ├── error.h
-│   ├── ast.h           all node types, enums, and structs
-│   ├── lexer.h
-│   ├── parser.h
-│   ├── codegen_c.h
-│   └── lsp.h
-├── examples/           sample .mar programs
-├── tests/
-│   ├── integration/           .mar programs used as test inputs
-│   └── integration/expected/  expected stdout for each test
-├── docs/
-├── bin/                compiled binary (after make)
-├── build/              object files (after make)
-├── Makefile
-└── install.sh
-```
-
----
-
-## Build Targets
-
-```bash
-make              # debug build  (bin/mar)
-make release      # optimised build with -O2
-make debug        # build with AddressSanitizer and UBSan
-make test         # compile and run all integration tests
-make examples     # run every .mar file in examples/
-make clean        # remove bin/ and build/
-```
-
----
-
-## Example Programs
-
-### Hello World
-
-```mar
-int main()
-{
-    print("Hello, World!\n")
-    return 0
+if (p == null) {
+    print("No player assigned.")
 }
+
 ```
+
+---
+
+## 6. Standard Library (Stdlib)
+
+Mar includes a highly optimized standard library injected directly into the AST via synthetic C imports. Use `import` at the top of your file.
+
+### `mar/math`
+
+```mar
+import "mar/math"
+
+int mar_min(int a, int b)
+int mar_max(int a, int b)
+int mar_abs(int a)
+float mar_sqrt(float a)
+float mar_pow(float base, float exp)
+float mar_floor(float a)
+float mar_ceil(float a)
+
+```
+
+### `mar/str`
+
+```mar
+import "mar/str"
+
+int mar_str_len(string s)
+int mar_str_cmp(string a, string b)
+int mar_str_to_int(string s)
+string mar_int_to_str(int n)  // Allocates from Arena
+
+```
+
+### `mar/io`
+
+```mar
+import "mar/io"
+
+// Reads entire file into Arena memory
+string mar_file_read(string path)
+
+// Overwrites file with content
+void mar_file_write(string path, string content)
+
+```
+
+---
+
+## 7. Compiler Architecture (Under the Hood)
+
+Understanding Mar's architecture helps you write better software and contribute to the compiler.
+
+### The Pipeline
+
+1. **Lexer (`src/lexer.c`):** Converts the `.mar` source text into a flat array of structural Tokens.
+2. **Parser (`src/parser.c`):** Uses Recursive Descent to build a strict Abstract Syntax Tree (AST). It groups multi-variable declarations into isolated `VarDeclItem` structs.
+3. **Codegen (`src/codegen_c.c`):** Walks the AST and emits native C code.
+4. **Orchestrator (`src/main.c`):** Interfaces with GCC/Clang via `system()` calls, compiles the binary, and manages file cleanup.
+
+### The Arena Allocator (`src/arena.c`)
+
+Mar guarantees zero memory leaks by utilizing an Arena Allocator (default 8MB).
+
+* When you call `new Player()`, Mar simply bumps a pointer forward inside the Arena.
+* String concatenations (`a + b`) are allocated on the Arena.
+* At program exit, the OS reclaims the entire Arena instantly. There are no `free()` calls, no Garbage Collector pauses, and no fragmentation.
+
+### C11 `_Generic` & Type Inference
+
+Mar avoids building a heavy, slow internal type-inference engine. Instead, it leverages the C backend.
+For `print(a, b)`, the codegen injects a `_mar_print()` macro at the top of the C file:
+
+```c
+#define _mar_print(x) _Generic((x), \
+    int64_t: printf("%ld", (int64_t)(x)), \
+    double:  printf("%lf", (double)(x)), \
+    char:    printf("%c", (char)(x)), \
+    const char*: printf("%s", (const char*)(x)) \
+)
+
+```
+
+This forces the C compiler to resolve the types natively, allowing Mar to remain incredibly fast.
+
+### `__typeof__` Array Traversal
+
+When parsing `for item in arr`, Mar lowers it using GCC/Clang compiler extensions:
+
+```c
+for (size_t i = 0; i < (sizeof(arr)/sizeof(arr[0])); i++) {
+    __typeof__(arr[0]) item = arr[i];
+    // loop body
+}
+
+```
+
+---
+
+## 8. Example Programs
 
 ### FizzBuzz
 
 ```mar
-int main()
-{
-    for i in range(1, 101)
-    {
-        if(i % 15 == 0)
-            print("FizzBuzz\n")
-        else if(i % 3 == 0)
-            print("Fizz\n")
-        else if(i % 5 == 0)
-            print("Buzz\n")
-        else
-            print("%d\n", i)
+int main() {
+    for i in range(1, 101) {
+        if (i % 15 == 0) {
+            print("FizzBuzz")
+        } else if (i % 3 == 0) {
+            print("Fizz")
+        } else if (i % 5 == 0) {
+            print("Buzz")
+        } else {
+            print(i)
+        }
     }
     return 0
 }
+
 ```
 
-### Primes
+### Prime Number Generator
 
 ```mar
-int is_prime(int n)
-{
-    if(n < 2) return 0
+int is_prime(int n) {
+    if (n < 2) return 0
     int i = 2
-    while(i * i <= n)
-    {
-        if(n % i == 0) return 0
-        i = i + 1
+    while (i * i <= n) {
+        if (n % i == 0) return 0
+        i += 1
     }
     return 1
 }
 
-int main()
-{
-    print("Primes up to 50: ")
-    for i in range(2, 51)
-    {
-        if(is_prime(i))
-            print("%d ", i)
+int main() {
+    print("Primes up to 50:")
+    for i in range(2, 51) {
+        if (is_prime(i)) {
+            print(i)
+        }
     }
-    print("\n")
     return 0
 }
-```
 
 ```
-Primes up to 50: 2 3 5 7 11 13 17 19 23 29 31 37 41 43 47
-```
 
-### RPG Player (classes)
+### File I/O
 
 ```mar
-class Player
-{
-    int health
-    int score
-    int kills
+import "mar/io"
+import "mar/str"
 
-    void init(int h)
-    {
-        health = h
-        score = 0
-        kills = 0
-    }
-
-    void fight(int enemy_level)
-    {
-        health = health - enemy_level
-        score  = score + enemy_level
-        kills  = kills + 1
-    }
-}
-
-int main()
-{
-    Player hero = new Player(100)
-
-    for i in range(1, 6)
-    {
-        hero.fight(i)
-        print("Fight %d: HP=%d Score=%d\n", i, hero.health, hero.score)
-    }
-
-    print("Total kills: %d\n", hero.kills)
+int main() {
+    string path = "data.txt"
+    mar_file_write(path, "100")
+    
+    string content = mar_file_read(path)
+    int value = mar_str_to_int(content)
+    
+    print("Read value:", value)
+    print("Doubled:", value * 2)
     return 0
 }
+
+```
+
+---
+
+## 9. Error Handling & Diagnostics
+
+Mar features precise, formatted error reporting. If you make a syntax mistake, Mar will point to the exact file, line, and column.
+
+```text
+ParserError at hello.mar:8:10
+  Unexpected token ',' in expression
+
+     8 |    int b=10,c=0
+       |             ^
+
+```
+
+| Error Type | Description |
+| --- | --- |
+| `LexerError` | Invalid characters encountered during tokenization. |
+| `ParserError` | Structural issues (missing braces, invalid syntax). |
+| `SemanticError` | Type mismatches, undefined variables. |
+| `CodegenError` | Internal failures during C translation. |
+
+---
+
+## 10. Contributing Guide
+
+Contributions are welcome! Mar is designed with strict stage separation, making it easy to hack on.
+
+| Task | Files to Edit |
+| --- | --- |
+| **Add a new Keyword** | `src/lexer.c` (`KEYWORDS` array) |
+| **Add an AST Node** | `include/mar/ast.h` (`StmtKind` / `ExprKind`) |
+| **Add a Syntax Rule** | `src/parser.c` (`parse_stmt` / `parse_expr`) |
+| **Change C Output** | `src/codegen_c.c` (`emit_stmt` / `emit_expr`) |
+| **Change CLI Flags** | `src/main.c` (`main`) |
+
+**Getting Started:**
+
+1. Fork the repo and clone it.
+2. Run `make debug` to build the compiler with AddressSanitizer enabled.
+3. Read `include/mar/ast.h` first — it is the single source of truth for the compiler's data structures.
+
+---
+
+## 11. Roadmap
+
+Mar is actively evolving. Here is the current progress:
+
+* [x] Primitive types (`int`, `float`, `char`, `bool`, `string`)
+* [x] Print/Take with automatic type inference (Zero format strings)
+* [x] Functional type casting (`char(x)`, `int(y)`)
+* [x] Multiple variable declarations (`int a=1, b=2`)
+* [x] Arrays with static initializers, `len()`, and `for item in arr`
+* [x] Functions with parameters and multiple return values
+* [x] Control flow (`if`, `while`, `for-range`, safe `switch`)
+* [x] Classes, inheritance, and arena-allocated objects
+* [x] Smart workspace cleanup (`mar run` vs `mar build`)
+* [x] LSP language server (hover, diagnostics, completion)
+* [ ] Closures and anonymous functions
+* [ ] Generics / Templates
+* [ ] Direct LLVM IR backend (bypassing C entirely)
+
+---
+
+## 12. License & Author
+
+**Author:** Aditya 
+
+**Architecture:** Compiler Frontend targeting C11 Native Binaries
+
+**Platforms:** macOS, Linux, Windows (WSL)
+
+This project is licensed under the MIT License — free to use, modify, distribute, and embed.
+
 ```
 
 ```
-Fight 1: HP=99 Score=1
-Fight 2: HP=97 Score=3
-Fight 3: HP=94 Score=6
-Fight 4: HP=90 Score=10
-Fight 5: HP=85 Score=15
-Total kills: 5
-```
-
----
-
-## Error Messages
-
-Mar reports errors with the file, line, column, and a caret pointing to the problem.
-
-```
-ParserError at hello.mar:3:5
-  Expected '}' but got 'return'
-
-     3 |     return 0
-           |     ^
-```
-
-| Error type | Meaning |
-|---|---|
-| `LexerError` | Unrecognised character in source |
-| `ParserError` | Structural problem — missing brace, unexpected token, etc. |
-| `SemanticError` | Logic problem — undefined variable, type mismatch, etc. |
-| `CodegenError` | Internal error during C output |
-
----
-
-## Contributing
-
-The compiler has a clean stage separation. Each feature maps directly to one or two files.
-
-| Change | Where |
-|---|---|
-| New keyword | `src/lexer.c` → `KEYWORDS[]` |
-| New single-character token | `src/lexer.c` → single-char `switch` in `lexer_tokenize` |
-| New syntax / statement | `src/parser.c` → `parse_stmt()` |
-| New AST node | `include/mar/ast.h` → `StmtKind` or `ExprKind` + union field |
-| New code generation rule | `src/codegen_c.c` → `emit_stmt()` or `emit_expr()` |
-| New type | `include/mar/ast.h` → `TypeKind` |
-| Class features | `src/parser.c` → `parse_class()`, `src/codegen_c.c` → `emit_class()` |
-| Error messages | `src/error.c` |
-
-**Recommended reading order for new contributors:**
-1. `include/mar/ast.h` — all data structures
-2. `src/lexer.c` — text to tokens
-3. `src/parser.c` — tokens to AST
-4. `src/codegen_c.c` — AST to C
-5. `src/main.c` — pipeline wiring
-
----
-
-## Design Notes
-
-**Why compile to C instead of machine code directly?**  
-C gives portability across Mac M1, Linux x86, and Windows, and the generated output is readable and debuggable. GCC and Clang's optimisers handle the heavy lifting for free.
-
-**Why an arena allocator?**  
-All AST nodes live in a single memory region. At the end of compilation one call frees everything — no per-node `free()`, no leaks by design. Mar program objects created with `new` use the same strategy at runtime.
-
-**Why no semicolons?**  
-The parser infers statement boundaries from context. Semicolons are optional noise that Mar omits by design.
-
-**Why auto-insert `break` in switch?**  
-C's implicit fallthrough is one of the most common sources of correctness bugs. Mar inserts `break` automatically after each case unless one is already present.
-
-**Why does `new` use an arena instead of `malloc`?**  
-Objects live for the program's lifetime. Arena allocation means no garbage collector, no `free()` calls at exit, and no use-after-free issues.
-
-**Why does `p.field` compile to `p->field`?**  
-All Mar class instances are pointers. The dot operator always means pointer dereference under the hood — the compiler handles the translation transparently.
-
----
-
-## Roadmap
-
-- [x] int, float, char, bool types
-- [x] string type with `+` concatenation and `len()`
-- [x] null literal
-- [x] Arrays with static initializers and `len()`
-- [x] For-in-array loop
-- [x] Functions with parameters and return values
-- [x] Multiple return values
-- [x] if / else
-- [x] while loop
-- [x] for i in range(a, b)
-- [x] switch / case / default (no colons, auto-break)
-- [x] Compound assignment operators (`+=`, `-=`, `*=`, `/=`, `%=`)
-- [x] print() and take()
-- [x] Classes with fields and methods
-- [x] new keyword and arena-allocated objects
-- [x] Dot operator for field access and method calls
-- [x] Inheritance with extends
-- [x] import (user files and mar/math, mar/str, mar/io)
-- [x] LSP language server (hover, diagnostics, completion)
-- [ ] Closures / first-class functions
-- [ ] Generics
-- [ ] LLVM IR backend
-
----
-
-## Troubleshooting
-
-1. Confirm you are in the project root: `cd ~/mar-lang`
-2. Confirm the binary exists: `ls bin/mar`
-3. If missing, rebuild: `make clean && make`
-4. On macOS, if `make` fails: `xcode-select --install`
-5. Test with a known-good file: `./bin/mar run examples/hello.mar`
-6. Open an issue on GitHub with the full error output
-
----
-
-## License
-
-MIT — free to use, modify, and distribute.
-
----
-
-## Author
-
-**Aditya Rao**  
-Language: C | Target: C → native binary | Platforms: macOS, Linux
