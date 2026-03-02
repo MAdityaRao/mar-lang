@@ -16,14 +16,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Create draft
+
+      - name: Create draft release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create ${{ github.ref_name }} \
             --draft \
             --title "Mar ${{ github.ref_name }}" \
-            --notes "See [install instructions](https://github.com/${{ github.repository }}#installation)."
+            --notes "See [install instructions](https://github.com/${{ github.repository }}#installation)." || echo "Release already exists"
 
   # ── 2. Build all platforms ───────────────────────────────────────────────
   build:
@@ -52,41 +53,50 @@ jobs:
       - name: Build
         shell: bash
         run: |
+          # 1. Purge any committed .o files to prevent "file format not recognized"
+          make clean || true
+          
+          # 2. Recreate fresh directories
           mkdir -p bin build
+          
+          # 3. Build for specific OS
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             # Manually inject the pre-installed MinGW path for Windows
             export PATH="/c/msys64/mingw64/bin:/c/msys64/usr/bin:$PATH"
             make CC=gcc
           elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+            # Pass CFLAGS so cross-compilation target hits every .c file
             make CFLAGS="-Wall -Wextra -std=c11 -Iinclude ${{ matrix.flags }}"
           else
+            # Default Linux build
             make
           fi
 
       - name: Upload Binary
         shell: bash
         env:
-          # This variable allows the 'gh' command to authenticate
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            # Check for the binary with or without .exe
+            # Handle .exe extension safely
             [ -f "bin/mar.exe" ] && FILE="bin/mar.exe" || FILE="bin/mar"
             mv "$FILE" "${{ matrix.asset_name }}"
           else
             mv bin/mar "${{ matrix.asset_name }}"
           fi
+          
           gh release upload ${{ github.ref_name }} "${{ matrix.asset_name }}" --clobber
 
   # ── 3. Upload install scripts ────────────────────────────────────────────
   upload_installers:
-    name: Upload Scripts
+    name: Upload Install Scripts
     needs: create_release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Upload
+
+      - name: Upload scripts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -101,6 +111,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
